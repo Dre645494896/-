@@ -1,0 +1,2483 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>极简待办</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --panel-soft: #f1f4f8;
+      --line: #e1e6ed;
+      --line-strong: #c8d1dc;
+      --text: #1f2933;
+      --muted: #6f7b88;
+      --quiet: #9aa5b1;
+      --primary: #2563eb;
+      --primary-soft: #eaf1ff;
+      --green: #10b981;
+      --red: #e5484d;
+      --amber: #f59e0b;
+      --shadow: 0 12px 32px rgba(31, 41, 51, .08);
+      --radius: 8px;
+      --topbar-h: 64px;
+      --weekday-h: 40px;
+      --day-min-h: 360px;
+      --task-min-h: 30px;
+      --task-font-size: 13px;
+      --task-pad-x: 8px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 14px;
+    }
+
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      min-height: var(--topbar-h);
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(246, 247, 249, .92);
+      backdrop-filter: blur(14px);
+      display: grid;
+      grid-template-columns: auto auto minmax(240px, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 128px;
+    }
+
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: var(--primary);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+
+    .month-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .month-label {
+      min-width: 120px;
+      text-align: center;
+      font-size: 16px;
+      font-weight: 760;
+    }
+
+    .filters {
+      display: grid;
+      grid-template-columns: minmax(150px, 1fr) 132px 112px;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .search, .select {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      color: var(--text);
+      outline: 0;
+    }
+
+    .search {
+      width: 100%;
+      padding: 0 12px;
+    }
+
+    .select {
+      padding: 0 10px;
+    }
+
+    .search:focus, .select:focus, .task-input:focus, .modal :is(textarea, input, select):focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      color: var(--text);
+      padding: 0 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .btn:hover { border-color: var(--line-strong); }
+    .btn.primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+
+    .btn.icon {
+      width: 38px;
+      padding: 0;
+      font-size: 18px;
+    }
+
+    .weekday {
+      position: sticky;
+      top: var(--topbar-h);
+      z-index: 20;
+      min-height: var(--weekday-h);
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, .9);
+      backdrop-filter: blur(12px);
+    }
+
+    .weekday span {
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 760;
+      letter-spacing: .04em;
+    }
+
+    .calendar {
+      padding: 1px 0 28px;
+    }
+
+    .sentinel {
+      height: 1px;
+    }
+
+    .week {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 1px;
+      background: var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .month-band-a .day:not(.is-today):not(.drag-over) {
+      background: #ffffff;
+    }
+
+    .month-band-b .day:not(.is-today):not(.drag-over) {
+      background: #fbfcff;
+    }
+
+    .month-start {
+      position: relative;
+    }
+
+    .month-start::before {
+      content: attr(data-month-title);
+      position: absolute;
+      left: 10px;
+      top: -1px;
+      z-index: 2;
+      padding: 2px 8px;
+      border: 1px solid #d7e2f2;
+      border-radius: 0 0 7px 7px;
+      background: rgba(248, 251, 255, .94);
+      color: #64748b;
+      font-size: 11px;
+      font-weight: 750;
+      pointer-events: none;
+    }
+
+    .day {
+      min-width: 0;
+      min-height: var(--day-min-h);
+      background: var(--panel);
+      padding: 9px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .day.other-month {
+      background: #fbfcfd;
+      color: var(--quiet);
+    }
+
+    .day.other-month.hide-other-tasks .task-list {
+      display: none;
+    }
+
+    .day.weekend.weekend-tint:not(.is-today) {
+      background: #fffafa;
+    }
+
+    .day.weekend.weekend-tint:not(.is-today) .date-num {
+      color: #d94665;
+    }
+
+    .day.is-today {
+      position: relative;
+      z-index: 1;
+      background: #f5f8ff;
+      box-shadow: inset 0 0 0 1px rgba(37, 99, 235, .42);
+    }
+
+    .day.is-today::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: rgba(37, 99, 235, .55);
+    }
+
+    .day:hover:not(.drag-over) {
+      background: #f4f8ff;
+      box-shadow: inset 0 0 0 1px rgba(37, 99, 235, .22);
+    }
+
+    .day.drag-over {
+      background: #dbe8ff;
+      box-shadow: inset 0 0 0 2px var(--primary);
+    }
+
+    .day-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      min-height: 24px;
+    }
+
+    .date-main {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .date-extra {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      min-width: 0;
+      color: var(--quiet);
+      font-size: 11px;
+      line-height: 1;
+      margin-top: 3px;
+    }
+
+    .date-lunar {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .date-badges {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+      margin-top: -3px;
+      min-height: 18px;
+    }
+
+    .date-badge {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      border-radius: 999px;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 750;
+      line-height: 1.2;
+      color: #64748b;
+      background: #eef2f7;
+    }
+
+    .date-badge.holiday {
+      color: #b45309;
+      background: rgba(245, 158, 11, .16);
+    }
+
+    .date-badge.workday {
+      color: #64748b;
+      background: rgba(100, 116, 139, .14);
+    }
+
+    .date-badge.festival {
+      color: #be123c;
+      background: rgba(244, 63, 94, .13);
+    }
+
+    .date-badge.term {
+      color: #047857;
+      background: rgba(16, 185, 129, .13);
+    }
+
+    .date-badge.special {
+      color: var(--special-color, #7c3aed);
+      background: var(--special-bg, rgba(124, 58, 237, .13));
+    }
+
+    .day.has-holiday:not(.is-today) {
+      box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .14);
+    }
+
+    .day.has-special:not(.is-today) {
+      background: linear-gradient(180deg, var(--special-bg, rgba(124, 58, 237, .14)), rgba(255,255,255,.96) 52px);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--special-color, #7c3aed) 28%, transparent);
+    }
+
+    .day.has-special {
+      position: relative;
+    }
+
+    .day.has-special::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 5px;
+      background: var(--special-color, #7c3aed);
+      opacity: .78;
+      pointer-events: none;
+    }
+
+    .date-num {
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .date-week {
+      display: none;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .today-pill {
+      border-radius: 999px;
+      background: var(--primary);
+      color: #fff;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 760;
+    }
+
+    .add-day {
+      width: 26px;
+      height: 26px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--quiet);
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .day:hover .add-day {
+      border-color: var(--line);
+      background: #fff;
+      color: var(--primary);
+    }
+
+    .task-list {
+      display: grid;
+      gap: 4px;
+      align-content: start;
+    }
+
+    .task {
+      min-height: var(--task-min-h);
+      border: 1px solid color-mix(in srgb, var(--cat-color) 24%, var(--line));
+      border-left: 4px solid var(--cat-color, var(--primary));
+      border-radius: 7px;
+      background: var(--cat-bg, #fff);
+      padding: 3px 5px 3px var(--task-pad-x);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 6px;
+      align-items: center;
+      cursor: grab;
+      transition: box-shadow .15s ease, transform .15s ease, opacity .15s ease;
+    }
+
+    .task:hover {
+      box-shadow: 0 4px 14px rgba(31, 41, 51, .08);
+    }
+
+    .task.dragging {
+      opacity: .45;
+      cursor: grabbing;
+    }
+
+    body.dragging-task {
+      user-select: none;
+    }
+
+    .task.done {
+      opacity: .72;
+      filter: saturate(.65);
+    }
+
+    .task.done .task-title {
+      color: var(--muted);
+      text-decoration: line-through;
+    }
+
+    .task-title {
+      margin: 0;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: var(--task-font-size);
+      line-height: 1.25;
+      font-weight: 700;
+    }
+
+    .task-main {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .task-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .tag {
+      border-radius: 5px;
+      padding: 1px 5px;
+      background: var(--panel-soft);
+      color: var(--muted);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .note {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+
+    .task-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 4px;
+      opacity: .18;
+      transition: opacity .15s ease;
+    }
+
+    .task:hover .task-actions,
+    .task:focus-within .task-actions {
+      opacity: 1;
+    }
+
+    .mini-btn {
+      width: 24px;
+      height: 24px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--muted);
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+    }
+
+    .mini-btn:hover { border-color: var(--line-strong); color: var(--text); }
+    .mini-btn.good:hover { color: var(--green); border-color: #a7f3d0; background: #ecfdf5; }
+    .mini-btn.bad:hover { color: var(--red); border-color: #fecaca; background: #fff1f2; }
+
+    .empty-hint {
+      color: var(--quiet);
+      font-size: 12px;
+      opacity: 0;
+      transition: opacity .16s ease;
+      padding: 6px 2px;
+    }
+
+    .day:hover .empty-hint { opacity: 1; }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(15, 23, 42, .34);
+      opacity: 0;
+      transition: opacity .18s ease;
+    }
+
+    .modal-backdrop.show {
+      display: flex;
+      opacity: 1;
+    }
+
+    .modal-backdrop.closing {
+      opacity: 0;
+    }
+
+    .modal {
+      width: min(520px, 100%);
+      max-height: 88vh;
+      overflow-y: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      transform: translateY(10px) scale(.985);
+      transition: transform .2s ease, opacity .2s ease;
+      opacity: 0;
+    }
+
+    .modal-backdrop.show .modal {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+    }
+
+    .modal-backdrop.closing .modal {
+      transform: translateY(8px) scale(.99);
+      opacity: 0;
+    }
+
+    .modal h2 {
+      margin: 0 0 14px;
+      font-size: 18px;
+    }
+
+    .modal-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .modal textarea,
+    .modal input,
+    .modal select {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--text);
+      outline: 0;
+      padding: 0 11px;
+    }
+
+    .modal textarea {
+      min-height: 120px;
+      resize: vertical;
+      padding-top: 10px;
+    }
+
+    .modal-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .settings-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .settings-modal {
+      width: min(760px, 96vw);
+    }
+
+    .settings-tabs {
+      display: flex;
+      gap: 6px;
+      padding: 4px;
+      margin-bottom: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-soft);
+      overflow-x: auto;
+    }
+
+    .settings-tab {
+      min-height: 32px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      padding: 0 12px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .settings-tab.active {
+      background: var(--panel);
+      border-color: var(--line);
+      color: var(--primary);
+      box-shadow: 0 1px 2px rgba(31, 41, 51, .06);
+    }
+
+    .settings-panel {
+      display: none;
+      gap: 12px;
+    }
+
+    .settings-panel.active {
+      display: grid;
+    }
+
+    .setting-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 92px;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .setting-row label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .setting-row input[type="range"] {
+      width: 100%;
+    }
+
+    .setting-help {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .setting-field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .setting-field label,
+    .category-settings-title {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .settings-two {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .category-settings {
+      display: grid;
+      gap: 8px;
+    }
+
+    .category-setting {
+      display: grid;
+      grid-template-columns: 40px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+    }
+
+    .category-setting input[type="color"] {
+      width: 40px;
+      height: 36px;
+      padding: 2px;
+    }
+
+    .special-editor {
+      display: grid;
+      grid-template-columns: 112px 64px 64px minmax(0, 1fr) 44px auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .special-editor input {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 0 9px;
+      outline: 0;
+    }
+
+    .special-editor input[type="color"] {
+      width: 44px;
+      padding: 2px;
+    }
+
+    .special-list {
+      display: grid;
+      gap: 6px;
+    }
+
+    .special-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      padding: 6px 8px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      font-size: 12px;
+    }
+
+    .special-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--special-color);
+      flex: 0 0 auto;
+    }
+
+    .special-item span:nth-child(2) {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .template-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-height: 30px;
+      padding: 8px;
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      background: #fbfcfd;
+    }
+
+    .template-save {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .template-chip {
+      min-height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--text);
+      padding: 0 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .template-chip button {
+      width: 20px;
+      height: 20px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      display: grid;
+      place-items: center;
+    }
+
+    .bulk-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .bulk-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .bulk-preview {
+      max-height: 180px;
+      overflow-y: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fbfcfd;
+      padding: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .modal-backdrop,
+      .modal {
+        transition: none;
+      }
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 22px;
+      z-index: 70;
+      transform: translateX(-50%) translateY(20px);
+      border-radius: 8px;
+      background: #111827;
+      color: #fff;
+      padding: 10px 14px;
+      opacity: 0;
+      pointer-events: none;
+      transition: .18s ease;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    @media (max-width: 1040px) {
+      .topbar {
+        grid-template-columns: 1fr auto;
+      }
+      .month-nav {
+        justify-content: flex-end;
+      }
+      .filters {
+        grid-column: 1 / -1;
+        grid-template-columns: minmax(180px, 1fr) 140px 120px;
+      }
+      .actions {
+        grid-column: 1 / -1;
+        justify-content: flex-start;
+      }
+    }
+
+    @media (max-width: 720px) {
+      :root { --topbar-h: auto; }
+      .topbar {
+        position: static;
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+      .brand, .month-nav, .actions { justify-content: space-between; }
+      .filters { grid-template-columns: 1fr; }
+      .weekday { display: none; }
+      .calendar { padding: 0 12px 24px; }
+      .week {
+        display: block;
+        border: 0;
+        background: transparent;
+      }
+      .day {
+        min-height: auto;
+        margin: 10px 0;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: 0 1px 2px rgba(31, 41, 51, .04);
+      }
+      .day.other-month {
+        opacity: .7;
+      }
+      .day.is-today {
+        box-shadow: inset 0 0 0 2px var(--primary), 0 8px 22px rgba(37, 99, 235, .12);
+      }
+      .date-week { display: inline; }
+      .date-extra { margin-top: 0; }
+      .empty-hint { opacity: 1; }
+      .modal-row { grid-template-columns: 1fr; }
+      .settings-two { grid-template-columns: 1fr; }
+      .special-editor { grid-template-columns: 1fr 1fr; }
+      .bulk-row { grid-template-columns: 1fr; }
+      .task-actions { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">待</div>
+      <h1>极简待办</h1>
+    </div>
+
+    <nav class="month-nav" aria-label="月份导航">
+      <button class="btn icon" id="prevMonthBtn" title="上个月">‹</button>
+      <div class="month-label" id="monthLabel">--</div>
+      <button class="btn icon" id="nextMonthBtn" title="下个月">›</button>
+      <button class="btn" id="currentMonthBtn">当月</button>
+      <button class="btn" id="todayBtn">今天</button>
+    </nav>
+
+    <div class="filters">
+      <input class="search" id="searchInput" type="search" placeholder="搜索任务" autocomplete="off" />
+      <select class="select" id="categoryFilter"></select>
+      <select class="select" id="statusFilter">
+        <option value="all">全部状态</option>
+        <option value="open">未完成</option>
+        <option value="done">已完成</option>
+      </select>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="settingsBtn">设置</button>
+      <button class="btn" id="exportBtn">导出</button>
+      <button class="btn" id="importBtn">导入</button>
+      <button class="btn primary" id="newTaskBtn">新任务</button>
+      <input id="importFile" type="file" accept="application/json" hidden />
+    </div>
+  </header>
+
+  <div class="weekday" aria-hidden="true">
+    <span>周一</span>
+    <span>周二</span>
+    <span>周三</span>
+    <span>周四</span>
+    <span>周五</span>
+    <span>周六</span>
+    <span>周日</span>
+  </div>
+
+  <main class="calendar" id="calendar">
+    <div class="sentinel" id="topSentinel"></div>
+    <div id="weeks"></div>
+    <div class="sentinel" id="bottomSentinel"></div>
+  </main>
+
+  <div class="modal-backdrop" id="modalBackdrop">
+    <form class="modal" id="taskForm">
+      <h2 id="modalTitle">新任务</h2>
+      <div class="modal-grid">
+        <textarea id="taskTitle" placeholder="任务内容" required maxlength="500"></textarea>
+        <div class="modal-row">
+          <input id="taskDate" type="date" required />
+          <select id="taskCategory"></select>
+        </div>
+        <input id="taskNote" type="text" placeholder="备注，可选" maxlength="120" />
+        <label class="template-save">
+          <input id="saveTemplateCheck" type="checkbox" />
+          保存为模板
+        </label>
+        <div class="template-strip" id="templateStrip"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" type="button" id="openBulkBtn">批量创建</button>
+        <button class="btn" type="button" id="cancelBtn">取消</button>
+        <button class="btn primary" type="submit">保存</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="modal-backdrop" id="settingsBackdrop">
+    <form class="modal settings-modal" id="settingsForm">
+      <h2>设置</h2>
+      <div class="settings-tabs" id="settingsTabs">
+        <button class="settings-tab active" type="button" data-settings-tab="appearance">外观</button>
+        <button class="settings-tab" type="button" data-settings-tab="calendar">标注</button>
+        <button class="settings-tab" type="button" data-settings-tab="tasks">任务</button>
+        <button class="settings-tab" type="button" data-settings-tab="categories">分类</button>
+        <button class="settings-tab" type="button" data-settings-tab="data">数据</button>
+      </div>
+      <div class="settings-grid">
+        <div class="settings-panel active" data-settings-panel="appearance">
+          <div class="setting-row">
+            <label>
+              日期栏最小高度
+              <input id="dayHeightRange" type="range" min="300" max="600" step="10" />
+            </label>
+            <input id="dayHeightInput" type="number" min="300" max="600" step="10" />
+          </div>
+          <div class="settings-two">
+            <div class="setting-field">
+              <label for="taskDensity">事项条密度</label>
+              <select id="taskDensity" class="select">
+                <option value="compact">紧凑</option>
+                <option value="standard">标准</option>
+                <option value="relaxed">舒展</option>
+              </select>
+            </div>
+            <div class="setting-field">
+              <label for="taskDisplay">事项显示内容</label>
+              <select id="taskDisplay" class="select">
+                <option value="title">只显示标题</option>
+                <option value="category">标题 + 分类</option>
+                <option value="note">标题 + 分类 + 备注</option>
+              </select>
+            </div>
+            <div class="setting-field">
+              <label for="otherMonthMode">非本月日期</label>
+              <select id="otherMonthMode" class="select">
+                <option value="dim">显示并淡化</option>
+                <option value="hideTasks">隐藏事项</option>
+              </select>
+            </div>
+            <div class="setting-field">
+              <label for="weekendStyle">周末样式</label>
+              <select id="weekendStyle" class="select">
+                <option value="normal">普通</option>
+                <option value="tint">轻微高亮</option>
+              </select>
+            </div>
+            <div class="setting-field">
+              <label for="monthTintEnabled">跨月背景区分</label>
+              <select id="monthTintEnabled" class="select">
+                <option value="true">开启</option>
+                <option value="false">关闭</option>
+              </select>
+            </div>
+          </div>
+          <p class="setting-help">外观设置会即时影响日期框和事项条的视觉密度。</p>
+        </div>
+
+        <div class="settings-panel" data-settings-panel="calendar">
+          <div class="settings-two">
+            <div class="setting-field">
+              <label for="lunarEnabled">农历显示</label>
+              <select id="lunarEnabled" class="select">
+                <option value="true">开启</option>
+                <option value="false">关闭</option>
+              </select>
+            </div>
+            <div class="setting-field">
+              <label for="solarTermEnabled">节气显示</label>
+              <select id="solarTermEnabled" class="select">
+                <option value="true">开启</option>
+                <option value="false">关闭</option>
+              </select>
+            </div>
+            <div class="setting-field">
+              <label for="holidayEnabled">法定节假日显示</label>
+              <select id="holidayEnabled" class="select">
+                <option value="true">开启</option>
+                <option value="false">关闭</option>
+              </select>
+            </div>
+          </div>
+          <div class="category-settings">
+            <div class="category-settings-title">特殊日期</div>
+            <div id="specialDateList"></div>
+            <div class="special-editor">
+              <select id="specialType" class="select">
+                <option value="solar">公历每年</option>
+                <option value="lunar">农历每年</option>
+              </select>
+              <input id="specialMonth" type="number" min="1" max="12" placeholder="月" />
+              <input id="specialDay" type="number" min="1" max="31" placeholder="日" />
+              <input id="specialName" type="text" maxlength="12" placeholder="名称" />
+              <input id="specialColor" type="color" value="#8b5cf6" />
+              <button class="btn" type="button" id="addSpecialDateBtn">添加</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-panel" data-settings-panel="tasks">
+          <div class="settings-two">
+            <div class="setting-field">
+              <label for="defaultCategory">默认新增分类</label>
+              <select id="defaultCategory" class="select"></select>
+            </div>
+            <div class="setting-field">
+              <label for="dragEnabled">跨天拖拽</label>
+              <select id="dragEnabled" class="select">
+                <option value="true">开启</option>
+                <option value="false">关闭</option>
+              </select>
+            </div>
+          </div>
+          <div class="category-settings">
+            <div class="category-settings-title">任务模板</div>
+            <div id="templateSettingsList"></div>
+          </div>
+        </div>
+
+        <div class="settings-panel" data-settings-panel="categories">
+          <div class="category-settings">
+            <div class="category-settings-title">分类名称与颜色</div>
+            <div id="categorySettings"></div>
+          </div>
+        </div>
+
+        <div class="settings-panel" data-settings-panel="data">
+          <div class="settings-two">
+            <button class="btn" type="button" id="settingsExportBtn">导出数据</button>
+            <button class="btn" type="button" id="settingsImportBtn">导入数据</button>
+            <button class="btn" type="button" id="clearDoneBtn">清理已完成</button>
+          </div>
+          <p class="setting-help">数据保存在当前浏览器本地。清理已完成会删除所有已完成事项。</p>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" type="button" id="settingsCancelBtn">取消</button>
+        <button class="btn primary" type="submit">保存</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="modal-backdrop" id="bulkBackdrop">
+    <form class="modal" id="bulkForm">
+      <h2>批量创建</h2>
+      <div class="bulk-grid">
+        <div class="setting-field">
+          <label for="bulkTitle">任务内容</label>
+          <input id="bulkTitle" type="text" maxlength="120" placeholder="例如：健身、复盘、提交日报" />
+        </div>
+        <div class="bulk-row">
+          <div class="setting-field">
+            <label for="bulkMode">创建方式</label>
+            <select id="bulkMode" class="select">
+              <option value="range">日期范围</option>
+              <option value="weekly">每周重复</option>
+              <option value="monthly">每月某日</option>
+              <option value="interval">每隔 N 天</option>
+              <option value="text">文本导入</option>
+            </select>
+          </div>
+          <div class="setting-field">
+            <label for="bulkCategory">分类</label>
+            <select id="bulkCategory" class="select"></select>
+          </div>
+        </div>
+        <div class="bulk-row">
+          <div class="setting-field">
+            <label for="bulkStart">开始日期</label>
+            <input id="bulkStart" type="date" />
+          </div>
+          <div class="setting-field">
+            <label for="bulkEnd">结束日期</label>
+            <input id="bulkEnd" type="date" />
+          </div>
+        </div>
+        <div class="bulk-row">
+          <div class="setting-field">
+            <label for="bulkWeekdays">周几</label>
+            <select id="bulkWeekdays" class="select" multiple size="3">
+              <option value="1">周一</option>
+              <option value="2">周二</option>
+              <option value="3">周三</option>
+              <option value="4">周四</option>
+              <option value="5">周五</option>
+              <option value="6">周六</option>
+              <option value="0">周日</option>
+            </select>
+          </div>
+          <div class="setting-field">
+            <label for="bulkMonthDay">每月/间隔</label>
+            <input id="bulkMonthDay" type="number" min="1" max="31" placeholder="每月第几天或间隔天数" />
+          </div>
+        </div>
+        <textarea id="bulkText" placeholder="文本导入：每行一个任务，可写 2026-06-01 任务内容"></textarea>
+        <div class="bulk-preview" id="bulkPreview">填写后会在这里预览将创建的任务。</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" type="button" id="bulkCancelBtn">取消</button>
+        <button class="btn" type="button" id="bulkPreviewBtn">预览</button>
+        <button class="btn primary" type="submit">创建</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const STORAGE_KEY = "jijiandaiban_tasks_v1";
+    const SETTINGS_KEY = "jijiandaiban_settings_v1";
+    const TEMPLATES_KEY = "jijiandaiban_templates_v1";
+    const DEFAULT_SETTINGS = {
+      version: 4,
+      dayMinHeight: 360,
+      taskDensity: "standard",
+      taskDisplay: "category",
+      defaultCategory: "work",
+      otherMonthMode: "dim",
+      weekendStyle: "tint",
+      dragEnabled: true,
+      monthTintEnabled: true,
+      lunarEnabled: true,
+      solarTermEnabled: true,
+      holidayEnabled: true,
+      specialDates: [],
+      categories: {}
+    };
+    const DENSITY = {
+      compact: { taskMinHeight: 28, taskFontSize: 12, taskPadX: 7 },
+      standard: { taskMinHeight: 32, taskFontSize: 13, taskPadX: 8 },
+      relaxed: { taskMinHeight: 38, taskFontSize: 14, taskPadX: 10 }
+    };
+    const CATEGORIES = [
+      { id: "work", name: "工作", color: "#2563eb", bg: "#eaf1ff" },
+      { id: "life", name: "生活", color: "#10b981", bg: "#e9fbf3" },
+      { id: "study", name: "学习", color: "#f59e0b", bg: "#fff6dc" },
+      { id: "other", name: "其他", color: "#8b5cf6", bg: "#f3ecff" }
+    ];
+    const WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+    const LUNAR_DAY_NAMES = ["初一","初二","初三","初四","初五","初六","初七","初八","初九","初十","十一","十二","十三","十四","十五","十六","十七","十八","十九","二十","廿一","廿二","廿三","廿四","廿五","廿六","廿七","廿八","廿九","三十"];
+    const LUNAR_MONTH_NUM = { "正月": 1, "二月": 2, "三月": 3, "四月": 4, "五月": 5, "六月": 6, "七月": 7, "八月": 8, "九月": 9, "十月": 10, "冬月": 11, "腊月": 12 };
+    const LUNAR_FESTIVALS = {
+      "1-1": "春节",
+      "1-15": "元宵",
+      "5-5": "端午",
+      "7-7": "七夕",
+      "8-15": "中秋",
+      "9-9": "重阳",
+      "12-8": "腊八"
+    };
+    const SOLAR_FESTIVALS = {
+      "01-01": "元旦",
+      "05-01": "劳动节",
+      "10-01": "国庆"
+    };
+    const SOLAR_TERM_NAMES = ["小寒","大寒","立春","雨水","惊蛰","春分","清明","谷雨","立夏","小满","芒种","夏至","小暑","大暑","立秋","处暑","白露","秋分","寒露","霜降","立冬","小雪","大雪","冬至"];
+    const SOLAR_TERM_INFO = [0,21208,42467,63836,85337,107014,128867,150921,173149,195551,218072,240693,263343,285989,308563,331033,353350,375494,397447,419210,440795,462224,483532,504758];
+    const HOLIDAY_2026 = {
+      "2026-01-01": { type: "holiday", name: "元旦" },
+      "2026-01-02": { type: "holiday", name: "元旦" },
+      "2026-01-03": { type: "holiday", name: "元旦" },
+      "2026-01-04": { type: "workday", name: "班" },
+      "2026-02-14": { type: "workday", name: "班" },
+      "2026-02-15": { type: "holiday", name: "春节" },
+      "2026-02-16": { type: "holiday", name: "春节" },
+      "2026-02-17": { type: "holiday", name: "春节" },
+      "2026-02-18": { type: "holiday", name: "春节" },
+      "2026-02-19": { type: "holiday", name: "春节" },
+      "2026-02-20": { type: "holiday", name: "春节" },
+      "2026-02-21": { type: "holiday", name: "春节" },
+      "2026-02-22": { type: "holiday", name: "春节" },
+      "2026-02-23": { type: "holiday", name: "春节" },
+      "2026-02-28": { type: "workday", name: "班" },
+      "2026-04-04": { type: "holiday", name: "清明" },
+      "2026-04-05": { type: "holiday", name: "清明" },
+      "2026-04-06": { type: "holiday", name: "清明" },
+      "2026-05-01": { type: "holiday", name: "劳动节" },
+      "2026-05-02": { type: "holiday", name: "劳动节" },
+      "2026-05-03": { type: "holiday", name: "劳动节" },
+      "2026-05-04": { type: "holiday", name: "劳动节" },
+      "2026-05-05": { type: "holiday", name: "劳动节" },
+      "2026-05-09": { type: "workday", name: "班" },
+      "2026-06-19": { type: "holiday", name: "端午" },
+      "2026-06-20": { type: "holiday", name: "端午" },
+      "2026-06-21": { type: "holiday", name: "端午" },
+      "2026-09-20": { type: "workday", name: "班" },
+      "2026-09-25": { type: "holiday", name: "中秋" },
+      "2026-09-26": { type: "holiday", name: "中秋" },
+      "2026-09-27": { type: "holiday", name: "中秋" },
+      "2026-10-01": { type: "holiday", name: "国庆" },
+      "2026-10-02": { type: "holiday", name: "国庆" },
+      "2026-10-03": { type: "holiday", name: "国庆" },
+      "2026-10-04": { type: "holiday", name: "国庆" },
+      "2026-10-05": { type: "holiday", name: "国庆" },
+      "2026-10-06": { type: "holiday", name: "国庆" },
+      "2026-10-07": { type: "holiday", name: "国庆" },
+      "2026-10-10": { type: "workday", name: "班" }
+    };
+
+    let tasks = loadTasks();
+    let currentYear = new Date().getFullYear();
+    let currentMonth = new Date().getMonth();
+    let firstMonday = null;
+    let lastSunday = null;
+    let editingId = null;
+    let loadingMore = false;
+    let draggingTaskId = null;
+    let mouseDrag = null;
+    let settings = loadSettings();
+    let taskTemplates = loadTemplates();
+    let lastBulkItems = [];
+
+    const els = {
+      monthLabel: document.getElementById("monthLabel"),
+      weeks: document.getElementById("weeks"),
+      topSentinel: document.getElementById("topSentinel"),
+      bottomSentinel: document.getElementById("bottomSentinel"),
+      searchInput: document.getElementById("searchInput"),
+      categoryFilter: document.getElementById("categoryFilter"),
+      statusFilter: document.getElementById("statusFilter"),
+      importFile: document.getElementById("importFile"),
+      modalBackdrop: document.getElementById("modalBackdrop"),
+      taskForm: document.getElementById("taskForm"),
+      modalTitle: document.getElementById("modalTitle"),
+      taskTitle: document.getElementById("taskTitle"),
+      taskDate: document.getElementById("taskDate"),
+      taskCategory: document.getElementById("taskCategory"),
+      taskNote: document.getElementById("taskNote"),
+      saveTemplateCheck: document.getElementById("saveTemplateCheck"),
+      templateStrip: document.getElementById("templateStrip"),
+      bulkBackdrop: document.getElementById("bulkBackdrop"),
+      bulkForm: document.getElementById("bulkForm"),
+      bulkTitle: document.getElementById("bulkTitle"),
+      bulkMode: document.getElementById("bulkMode"),
+      bulkCategory: document.getElementById("bulkCategory"),
+      bulkStart: document.getElementById("bulkStart"),
+      bulkEnd: document.getElementById("bulkEnd"),
+      bulkWeekdays: document.getElementById("bulkWeekdays"),
+      bulkMonthDay: document.getElementById("bulkMonthDay"),
+      bulkText: document.getElementById("bulkText"),
+      bulkPreview: document.getElementById("bulkPreview"),
+      settingsBackdrop: document.getElementById("settingsBackdrop"),
+      settingsForm: document.getElementById("settingsForm"),
+      dayHeightRange: document.getElementById("dayHeightRange"),
+      dayHeightInput: document.getElementById("dayHeightInput"),
+      taskDensity: document.getElementById("taskDensity"),
+      taskDisplay: document.getElementById("taskDisplay"),
+      defaultCategory: document.getElementById("defaultCategory"),
+      otherMonthMode: document.getElementById("otherMonthMode"),
+      weekendStyle: document.getElementById("weekendStyle"),
+      dragEnabled: document.getElementById("dragEnabled"),
+      monthTintEnabled: document.getElementById("monthTintEnabled"),
+      lunarEnabled: document.getElementById("lunarEnabled"),
+      solarTermEnabled: document.getElementById("solarTermEnabled"),
+      holidayEnabled: document.getElementById("holidayEnabled"),
+      specialDateList: document.getElementById("specialDateList"),
+      specialType: document.getElementById("specialType"),
+      specialMonth: document.getElementById("specialMonth"),
+      specialDay: document.getElementById("specialDay"),
+      specialName: document.getElementById("specialName"),
+      specialColor: document.getElementById("specialColor"),
+      categorySettings: document.getElementById("categorySettings"),
+      templateSettingsList: document.getElementById("templateSettingsList"),
+      toast: document.getElementById("toast")
+    };
+
+    init();
+
+    function init() {
+      applySettings();
+      renderSelects();
+      bindEvents();
+      renderAround(new Date());
+      setupInfiniteScroll();
+      setTimeout(() => scrollToDate(new Date(), false), 60);
+    }
+
+    function bindEvents() {
+      document.getElementById("prevMonthBtn").addEventListener("click", () => jumpMonth(-1));
+      document.getElementById("nextMonthBtn").addEventListener("click", () => jumpMonth(1));
+      document.getElementById("currentMonthBtn").addEventListener("click", goCurrentMonth);
+      document.getElementById("todayBtn").addEventListener("click", goToday);
+      document.getElementById("newTaskBtn").addEventListener("click", () => openModal(toKey(new Date())));
+      document.getElementById("settingsBtn").addEventListener("click", openSettings);
+      document.getElementById("exportBtn").addEventListener("click", exportData);
+      document.getElementById("importBtn").addEventListener("click", () => els.importFile.click());
+      document.getElementById("cancelBtn").addEventListener("click", closeModal);
+      document.getElementById("settingsCancelBtn").addEventListener("click", closeSettings);
+      document.getElementById("openBulkBtn").addEventListener("click", () => openBulk(els.taskDate.value || toKey(new Date())));
+      document.getElementById("bulkCancelBtn").addEventListener("click", closeBulk);
+      document.getElementById("bulkPreviewBtn").addEventListener("click", updateBulkPreview);
+      document.getElementById("settingsExportBtn").addEventListener("click", exportData);
+      document.getElementById("settingsImportBtn").addEventListener("click", () => els.importFile.click());
+      document.getElementById("clearDoneBtn").addEventListener("click", clearDoneTasks);
+      els.importFile.addEventListener("change", importData);
+      els.searchInput.addEventListener("input", renderVisibleWeeks);
+      els.categoryFilter.addEventListener("change", renderVisibleWeeks);
+      els.statusFilter.addEventListener("change", renderVisibleWeeks);
+      els.taskForm.addEventListener("submit", saveModalTask);
+      els.bulkForm.addEventListener("submit", createBulkTasks);
+      els.settingsForm.addEventListener("submit", saveSettings);
+      els.dayHeightRange.addEventListener("input", event => syncDayHeight(event.target.value));
+      els.dayHeightInput.addEventListener("input", event => syncDayHeight(event.target.value));
+      document.getElementById("addSpecialDateBtn").addEventListener("click", addSpecialDateFromForm);
+      document.getElementById("settingsTabs").addEventListener("click", switchSettingsTab);
+      els.modalBackdrop.addEventListener("click", event => {
+        if (event.target === els.modalBackdrop) closeModal();
+      });
+      els.settingsBackdrop.addEventListener("click", event => {
+        if (event.target === els.settingsBackdrop) closeSettings();
+      });
+      els.bulkBackdrop.addEventListener("click", event => {
+        if (event.target === els.bulkBackdrop) closeBulk();
+      });
+      document.addEventListener("keydown", event => {
+        if (event.key === "Escape") {
+          closeModal();
+          closeSettings();
+          closeBulk();
+        }
+      });
+      document.addEventListener("dragstart", handleDragStart);
+      document.addEventListener("dragend", handleDragEnd);
+      document.addEventListener("dragover", handleDragOver);
+      document.addEventListener("dragleave", handleDragLeave);
+      document.addEventListener("drop", handleDrop);
+      document.addEventListener("mousedown", handleMouseDragStart);
+      document.addEventListener("mousemove", handleMouseDragMove);
+      document.addEventListener("mouseup", handleMouseDragEnd);
+      window.addEventListener("scroll", throttle(updateMonthFromScroll, 80));
+      window.addEventListener("resize", throttle(updateMonthFromScroll, 120));
+    }
+
+    function renderSelects() {
+      const categories = getCategories();
+      const categoryOptions = [
+        '<option value="all">全部分类</option>',
+        ...categories.map(cat => `<option value="${cat.id}">${cat.name}</option>`)
+      ].join("");
+      els.categoryFilter.innerHTML = categoryOptions;
+      const taskOptions = categories.map(cat => `<option value="${cat.id}">${cat.name}</option>`).join("");
+      els.taskCategory.innerHTML = taskOptions;
+      els.defaultCategory.innerHTML = taskOptions;
+      els.bulkCategory.innerHTML = taskOptions;
+    }
+
+    function renderAround(date) {
+      const start = getMonday(new Date(date.getFullYear(), date.getMonth(), 1));
+      start.setDate(start.getDate() - 28);
+      const weeks = [];
+      const cursor = new Date(start);
+      for (let i = 0; i < 18; i++) {
+        weeks.push(getWeekDates(cursor));
+        cursor.setDate(cursor.getDate() + 7);
+      }
+      firstMonday = weeks[0][0];
+      lastSunday = weeks[weeks.length - 1][6];
+      els.weeks.innerHTML = weeks.map(renderWeek).join("");
+      updateMonthFromScroll();
+    }
+
+    function renderVisibleWeeks() {
+      document.querySelectorAll(".week").forEach(week => {
+        const dates = JSON.parse(week.dataset.dates).map(parseKey);
+        week.outerHTML = renderWeek(dates);
+      });
+      updateMonthFromScroll();
+    }
+
+    function renderWeek(dates) {
+      const middle = dates[3];
+      const monthKey = `${middle.getFullYear()}-${middle.getMonth()}`;
+      const dateKeys = dates.map(toKey);
+      const startsMonth = dates.some(d => d.getDate() === 1);
+      const monthTitleDate = dates.find(d => d.getDate() === 1) || middle;
+      const monthBand = settings.monthTintEnabled ? (monthTitleDate.getMonth() % 2 === 0 ? "month-band-a" : "month-band-b") : "";
+      return `<section class="week ${monthBand} ${startsMonth ? "month-start" : ""}" data-month="${monthKey}" data-month-title="${monthTitleDate.getFullYear()}年${monthTitleDate.getMonth()+1}月" data-dates='${JSON.stringify(dateKeys)}'>
+        ${dates.map(date => renderDay(date, monthKey)).join("")}
+      </section>`;
+    }
+
+    function renderDay(date, monthKey) {
+      const key = toKey(date);
+      const dayMonthKey = `${date.getFullYear()}-${date.getMonth()}`;
+      const isOtherMonth = dayMonthKey !== monthKey;
+      const dayTasks = isOtherMonth && settings.otherMonthMode === "hideTasks" ? [] : getVisibleTasksForDate(key);
+      const today = isToday(date);
+      const weekend = date.getDay() === 0 || date.getDay() === 6;
+      const weekday = WEEKDAYS[(date.getDay() + 6) % 7];
+      const marks = getDateMarks(date);
+      const special = marks.find(mark => mark.kind === "special");
+      const style = special ? ` style="--special-color:${special.color};--special-bg:${hexToSoftBg(special.color)}"` : "";
+      const classes = [
+        "day",
+        isOtherMonth ? "other-month" : "",
+        isOtherMonth && settings.otherMonthMode === "hideTasks" ? "hide-other-tasks" : "",
+        weekend ? "weekend" : "",
+        settings.weekendStyle === "tint" ? "weekend-tint" : "",
+        marks.some(mark => mark.kind === "holiday") ? "has-holiday" : "",
+        special ? "has-special" : "",
+        today ? "is-today" : ""
+      ].filter(Boolean).join(" ");
+      return `<article class="${classes}" data-date="${key}"${style} ondblclick="openModal('${key}')">
+        <div class="day-head">
+          <div class="date-main">
+            <span class="date-num">${date.getDate()}</span>
+            <span class="date-week">${weekday}</span>
+            ${today ? '<span class="today-pill">今天</span>' : ""}
+          </div>
+          <button class="add-day" type="button" title="添加任务" onclick="event.stopPropagation();openModal('${key}')">+</button>
+        </div>
+        ${renderDateMeta(date, marks)}
+        <div class="task-list">
+          ${dayTasks.length ? dayTasks.map(renderTask).join("") : '<div class="empty-hint">双击或点 + 添加</div>'}
+        </div>
+      </article>`;
+    }
+
+    function renderTask(task) {
+      const cat = getCategory(task.category);
+      const showCategory = settings.taskDisplay === "category" || settings.taskDisplay === "note";
+      const showNote = settings.taskDisplay === "note" && task.note;
+      return `<div class="task ${task.done ? "done" : ""}" draggable="${settings.dragEnabled ? "true" : "false"}" data-task-id="${task.id}" data-task-date="${task.date}" style="--cat-color:${cat.color};--cat-bg:${cat.bg}" ondblclick="event.stopPropagation();openModal('${task.date}','${task.id}')">
+        <div class="task-main">
+          <p class="task-title">${escapeHtml(task.title)}</p>
+          ${showCategory ? `<span class="tag">${escapeHtml(cat.name)}</span>` : ""}
+          ${showNote ? `<span class="note">${escapeHtml(task.note)}</span>` : ""}
+        </div>
+        <div class="task-actions">
+          <button class="mini-btn good" type="button" title="${task.done ? "取消完成" : "完成"}" onclick="event.stopPropagation();toggleTask('${task.id}')">${task.done ? "↩" : "✓"}</button>
+          <button class="mini-btn" type="button" title="编辑" onclick="event.stopPropagation();openModal('${task.date}','${task.id}')">✎</button>
+          <button class="mini-btn bad" type="button" title="删除" onclick="event.stopPropagation();deleteTask('${task.id}')">×</button>
+        </div>
+      </div>`;
+    }
+
+    function getVisibleTasksForDate(key) {
+      const query = els.searchInput.value.trim().toLowerCase();
+      const category = els.categoryFilter.value;
+      const status = els.statusFilter.value;
+      return tasks
+        .filter(task => task.date === key)
+        .filter(task => category === "all" || task.category === category)
+        .filter(task => status === "all" || (status === "done" ? task.done : !task.done))
+        .filter(task => !query || task.title.toLowerCase().includes(query) || (task.note || "").toLowerCase().includes(query))
+        .sort((a, b) => Number(a.done) - Number(b.done) || a.createdAt - b.createdAt);
+    }
+
+    function handleDragStart(event) {
+      if (!settings.dragEnabled) {
+        event.preventDefault();
+        return;
+      }
+      const taskEl = event.target.closest(".task");
+      if (!taskEl) return;
+      draggingTaskId = taskEl.dataset.taskId;
+      taskEl.classList.add("dragging");
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", draggingTaskId);
+    }
+
+    function handleDragEnd() {
+      draggingTaskId = null;
+      document.querySelectorAll(".task.dragging").forEach(el => el.classList.remove("dragging"));
+      document.querySelectorAll(".day.drag-over").forEach(el => el.classList.remove("drag-over"));
+    }
+
+    function handleDragOver(event) {
+      if (!settings.dragEnabled || !draggingTaskId) return;
+      const day = event.target.closest(".day");
+      if (!day) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      document.querySelectorAll(".day.drag-over").forEach(el => {
+        if (el !== day) el.classList.remove("drag-over");
+      });
+      day.classList.add("drag-over");
+    }
+
+    function handleDragLeave(event) {
+      const day = event.target.closest(".day");
+      if (!day || day.contains(event.relatedTarget)) return;
+      day.classList.remove("drag-over");
+    }
+
+    function handleDrop(event) {
+      if (!settings.dragEnabled || !draggingTaskId) return;
+      const day = event.target.closest(".day");
+      if (!day) return;
+      event.preventDefault();
+      const targetDate = day.dataset.date;
+      moveTaskToDate(draggingTaskId, targetDate);
+      handleDragEnd();
+    }
+
+    function handleMouseDragStart(event) {
+      if (!settings.dragEnabled) return;
+      if (event.button !== 0 || event.target.closest("button")) return;
+      const taskEl = event.target.closest(".task");
+      if (!taskEl) return;
+      mouseDrag = {
+        id: taskEl.dataset.taskId,
+        startX: event.clientX,
+        startY: event.clientY,
+        active: false,
+        el: taskEl
+      };
+    }
+
+    function handleMouseDragMove(event) {
+      if (!mouseDrag) return;
+      const distance = Math.hypot(event.clientX - mouseDrag.startX, event.clientY - mouseDrag.startY);
+      if (!mouseDrag.active && distance < 8) return;
+      mouseDrag.active = true;
+      mouseDrag.el.classList.add("dragging");
+      document.body.classList.add("dragging-task");
+      const day = document.elementFromPoint(event.clientX, event.clientY)?.closest(".day");
+      document.querySelectorAll(".day.drag-over").forEach(el => {
+        if (el !== day) el.classList.remove("drag-over");
+      });
+      if (day) day.classList.add("drag-over");
+    }
+
+    function handleMouseDragEnd(event) {
+      if (!mouseDrag) return;
+      const drag = mouseDrag;
+      mouseDrag = null;
+      drag.el.classList.remove("dragging");
+      document.body.classList.remove("dragging-task");
+      document.querySelectorAll(".day.drag-over").forEach(el => el.classList.remove("drag-over"));
+      if (!drag.active) return;
+      const day = document.elementFromPoint(event.clientX, event.clientY)?.closest(".day");
+      if (day) moveTaskToDate(drag.id, day.dataset.date);
+    }
+
+    function moveTaskToDate(taskId, targetDate) {
+      const task = tasks.find(item => item.id === taskId);
+      if (!task || !targetDate || task.date === targetDate) return false;
+      task.date = targetDate;
+      persist();
+      renderVisibleWeeks();
+      showToast(`已移动到 ${targetDate.slice(5)}`);
+      return true;
+    }
+
+    function setupInfiniteScroll() {
+      const bottomObserver = new IntersectionObserver(entries => {
+        if (entries.some(entry => entry.isIntersecting)) appendWeeks(8);
+      }, { rootMargin: "700px 0px" });
+      const topObserver = new IntersectionObserver(entries => {
+        if (entries.some(entry => entry.isIntersecting)) prependWeeks(8);
+      }, { rootMargin: "700px 0px" });
+      bottomObserver.observe(els.bottomSentinel);
+      topObserver.observe(els.topSentinel);
+    }
+
+    function appendWeeks(count) {
+      if (loadingMore || !lastSunday) return;
+      loadingMore = true;
+      const cursor = new Date(lastSunday);
+      cursor.setDate(cursor.getDate() + 1);
+      let html = "";
+      for (let i = 0; i < count; i++) {
+        const week = getWeekDates(cursor);
+        html += renderWeek(week);
+        cursor.setDate(cursor.getDate() + 7);
+      }
+      const newLast = new Date(cursor);
+      newLast.setDate(newLast.getDate() - 1);
+      lastSunday = newLast;
+      els.weeks.insertAdjacentHTML("beforeend", html);
+      loadingMore = false;
+    }
+
+    function prependWeeks(count) {
+      if (loadingMore || !firstMonday) return;
+      loadingMore = true;
+      const beforeTop = els.weeks.getBoundingClientRect().top;
+      const start = new Date(firstMonday);
+      start.setDate(start.getDate() - count * 7);
+      const cursor = new Date(start);
+      let html = "";
+      for (let i = 0; i < count; i++) {
+        const week = getWeekDates(cursor);
+        html += renderWeek(week);
+        cursor.setDate(cursor.getDate() + 7);
+      }
+      firstMonday = start;
+      els.weeks.insertAdjacentHTML("afterbegin", html);
+      const afterTop = els.weeks.getBoundingClientRect().top;
+      window.scrollBy(0, afterTop - beforeTop);
+      loadingMore = false;
+    }
+
+    function jumpMonth(delta) {
+      const target = new Date(currentYear, currentMonth + delta, 1);
+      currentYear = target.getFullYear();
+      currentMonth = target.getMonth();
+      ensureMonthRendered(target);
+      setTimeout(() => scrollToMonth(target), 40);
+    }
+
+    function goToday() {
+      const today = new Date();
+      currentYear = today.getFullYear();
+      currentMonth = today.getMonth();
+      ensureMonthRendered(today);
+      setTimeout(() => scrollToDate(today, true), 40);
+    }
+
+    function goCurrentMonth() {
+      const today = new Date();
+      currentYear = today.getFullYear();
+      currentMonth = today.getMonth();
+      ensureMonthRendered(today);
+      setTimeout(() => scrollToMonth(new Date(today.getFullYear(), today.getMonth(), 1)), 40);
+    }
+
+    function ensureMonthRendered(date) {
+      const key = `${date.getFullYear()}-${date.getMonth()}`;
+      if (document.querySelector(`.week[data-month="${key}"]`)) return;
+      renderAround(date);
+    }
+
+    function scrollToMonth(date) {
+      const key = `${date.getFullYear()}-${date.getMonth()}`;
+      const week = document.querySelector(`.week[data-month="${key}"]`);
+      if (!week) return;
+      const top = week.getBoundingClientRect().top + window.scrollY - getStickyOffset() - 8;
+      window.scrollTo({ top, behavior: "smooth" });
+      updateMonthLabel(date.getFullYear(), date.getMonth());
+    }
+
+    function scrollToDate(date, smooth) {
+      const key = toKey(date);
+      const cell = document.querySelector(`.day[data-date="${key}"]`);
+      if (!cell) return;
+      const week = cell.closest(".week");
+      const top = week.getBoundingClientRect().top + window.scrollY - getStickyOffset() - 8;
+      window.scrollTo({ top, behavior: smooth ? "smooth" : "auto" });
+      updateMonthLabel(date.getFullYear(), date.getMonth());
+    }
+
+    function updateMonthFromScroll() {
+      const weeks = document.querySelectorAll(".week");
+      const threshold = getStickyOffset() + 14;
+      for (const week of weeks) {
+        const rect = week.getBoundingClientRect();
+        if (rect.top <= threshold && rect.bottom > threshold) {
+          const [year, month] = week.dataset.month.split("-").map(Number);
+          updateMonthLabel(year, month);
+          return;
+        }
+      }
+      const first = weeks[0];
+      if (first) {
+        const [year, month] = first.dataset.month.split("-").map(Number);
+        updateMonthLabel(year, month);
+      }
+    }
+
+    function updateMonthLabel(year, month) {
+      currentYear = year;
+      currentMonth = month;
+      els.monthLabel.textContent = `${year}年${month + 1}月`;
+    }
+
+    function openModal(dateKey, id) {
+      editingId = id || null;
+      const task = tasks.find(item => item.id === editingId);
+      els.modalTitle.textContent = task ? "编辑任务" : "新任务";
+      els.taskTitle.value = task ? task.title : "";
+      els.taskDate.value = task ? task.date : dateKey || toKey(new Date());
+      els.taskCategory.value = task ? task.category : settings.defaultCategory;
+      els.taskNote.value = task ? task.note || "" : "";
+      els.saveTemplateCheck.checked = false;
+      renderTemplateStrip(els.taskDate.value);
+      showBackdrop(els.modalBackdrop);
+      setTimeout(() => els.taskTitle.focus(), 0);
+    }
+
+    function closeModal() {
+      hideBackdrop(els.modalBackdrop);
+      editingId = null;
+      els.taskForm.reset();
+    }
+
+    function openSettings() {
+      els.dayHeightRange.value = settings.dayMinHeight;
+      els.dayHeightInput.value = settings.dayMinHeight;
+      els.taskDensity.value = settings.taskDensity;
+      els.taskDisplay.value = settings.taskDisplay;
+      els.defaultCategory.value = settings.defaultCategory;
+      els.otherMonthMode.value = settings.otherMonthMode;
+      els.weekendStyle.value = settings.weekendStyle;
+      els.dragEnabled.value = String(settings.dragEnabled);
+      els.monthTintEnabled.value = String(settings.monthTintEnabled);
+      els.lunarEnabled.value = String(settings.lunarEnabled);
+      els.solarTermEnabled.value = String(settings.solarTermEnabled);
+      els.holidayEnabled.value = String(settings.holidayEnabled);
+      activateSettingsTab("appearance");
+      renderCategorySettings();
+      renderSpecialDateList();
+      renderTemplateSettingsList();
+      showBackdrop(els.settingsBackdrop);
+    }
+
+    function closeSettings() {
+      hideBackdrop(els.settingsBackdrop);
+      syncDayHeight(settings.dayMinHeight);
+    }
+
+    function showBackdrop(el) {
+      el.classList.remove("closing");
+      el.classList.add("show");
+    }
+
+    function hideBackdrop(el) {
+      if (!el.classList.contains("show")) return;
+      el.classList.add("closing");
+      setTimeout(() => el.classList.remove("show", "closing"), 190);
+    }
+
+    function switchSettingsTab(event) {
+      const btn = event.target.closest("[data-settings-tab]");
+      if (!btn) return;
+      activateSettingsTab(btn.dataset.settingsTab);
+    }
+
+    function activateSettingsTab(tab) {
+      document.querySelectorAll("[data-settings-tab]").forEach(btn => btn.classList.toggle("active", btn.dataset.settingsTab === tab));
+      document.querySelectorAll("[data-settings-panel]").forEach(panel => panel.classList.toggle("active", panel.dataset.settingsPanel === tab));
+    }
+
+    function syncDayHeight(value) {
+      const next = clamp(Number(value) || DEFAULT_SETTINGS.dayMinHeight, 300, 600);
+      els.dayHeightRange.value = next;
+      els.dayHeightInput.value = next;
+      document.documentElement.style.setProperty("--day-min-h", `${next}px`);
+    }
+
+    function saveSettings(event) {
+      event.preventDefault();
+      settings.dayMinHeight = clamp(Number(els.dayHeightInput.value) || DEFAULT_SETTINGS.dayMinHeight, 300, 600);
+      settings.taskDensity = DENSITY[els.taskDensity.value] ? els.taskDensity.value : DEFAULT_SETTINGS.taskDensity;
+      settings.taskDisplay = ["title", "category", "note"].includes(els.taskDisplay.value) ? els.taskDisplay.value : DEFAULT_SETTINGS.taskDisplay;
+      settings.defaultCategory = getCategories().some(cat => cat.id === els.defaultCategory.value) ? els.defaultCategory.value : DEFAULT_SETTINGS.defaultCategory;
+      settings.otherMonthMode = ["dim", "hideTasks"].includes(els.otherMonthMode.value) ? els.otherMonthMode.value : DEFAULT_SETTINGS.otherMonthMode;
+      settings.weekendStyle = ["normal", "tint"].includes(els.weekendStyle.value) ? els.weekendStyle.value : DEFAULT_SETTINGS.weekendStyle;
+      settings.dragEnabled = els.dragEnabled.value === "true";
+      settings.monthTintEnabled = els.monthTintEnabled.value === "true";
+      settings.lunarEnabled = els.lunarEnabled.value === "true";
+      settings.solarTermEnabled = els.solarTermEnabled.value === "true";
+      settings.holidayEnabled = els.holidayEnabled.value === "true";
+      settings.categories = readCategorySettings();
+      applySettings();
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      renderSelects();
+      renderVisibleWeeks();
+      els.settingsBackdrop.classList.remove("show");
+      showToast("设置已保存");
+    }
+
+    function saveModalTask(event) {
+      event.preventDefault();
+      const payload = {
+        title: els.taskTitle.value.trim(),
+        date: els.taskDate.value,
+        category: els.taskCategory.value,
+        note: els.taskNote.value.trim()
+      };
+      if (!payload.title) return showToast("请输入任务内容");
+      if (editingId) {
+        tasks = tasks.map(task => task.id === editingId ? { ...task, ...payload } : task);
+        showToast("已保存");
+      } else {
+        tasks.unshift({ ...payload, id: createId(), done: false, createdAt: Date.now() });
+        if (els.saveTemplateCheck.checked) saveTemplate(payload);
+        showToast("已添加");
+      }
+      persist();
+      closeModal();
+      renderVisibleWeeks();
+      ensureDateRendered(parseKey(payload.date));
+    }
+
+    function ensureDateRendered(date) {
+      if (!document.querySelector(`.day[data-date="${toKey(date)}"]`)) {
+        renderAround(date);
+      }
+    }
+
+    function toggleTask(id) {
+      tasks = tasks.map(task => task.id === id ? { ...task, done: !task.done } : task);
+      persist();
+      renderVisibleWeeks();
+    }
+
+    function deleteTask(id) {
+      const task = tasks.find(item => item.id === id);
+      if (!task) return;
+      if (!confirm(`删除「${task.title}」？`)) return;
+      tasks = tasks.filter(item => item.id !== id);
+      persist();
+      renderVisibleWeeks();
+      showToast("已删除");
+    }
+
+    function clearDoneTasks() {
+      const before = tasks.length;
+      tasks = tasks.filter(task => !task.done);
+      persist();
+      renderVisibleWeeks();
+      showToast(`已清理 ${before - tasks.length} 条已完成`);
+    }
+
+    function saveTemplate(payload) {
+      const title = payload.title.trim();
+      if (!title) return;
+      const exists = taskTemplates.some(t => t.title === title && t.category === payload.category && (t.note || "") === (payload.note || ""));
+      if (exists) return;
+      taskTemplates.unshift({ id: createId(), title, category: payload.category, note: payload.note || "", createdAt: Date.now() });
+      taskTemplates = taskTemplates.slice(0, 24);
+      persistTemplates();
+    }
+
+    function renderTemplateStrip(dateKey) {
+      if (!taskTemplates.length) {
+        els.templateStrip.innerHTML = '<span class="setting-help">暂无模板，勾选“保存为模板”后会出现在这里。</span>';
+        return;
+      }
+      els.templateStrip.innerHTML = taskTemplates.slice(0, 10).map(t => `
+        <span class="template-chip" title="${escapeHtml(t.title)}">
+          <span onclick="fillTemplate('${t.id}')">${escapeHtml(t.title)}</span>
+          <button type="button" title="直接添加" onclick="event.stopPropagation();addTemplateToDate('${t.id}','${dateKey}')">+</button>
+        </span>
+      `).join("");
+    }
+
+    function fillTemplate(id) {
+      const t = taskTemplates.find(item => item.id === id);
+      if (!t) return;
+      els.taskTitle.value = t.title;
+      els.taskCategory.value = t.category;
+      els.taskNote.value = t.note || "";
+      showToast("已填入模板");
+    }
+
+    function addTemplateToDate(id, dateKey) {
+      const t = taskTemplates.find(item => item.id === id);
+      if (!t) return;
+      tasks.unshift({ id: createId(), title: t.title, date: dateKey || els.taskDate.value || toKey(new Date()), category: t.category, note: t.note || "", done: false, createdAt: Date.now() });
+      persist();
+      renderVisibleWeeks();
+      showToast("已添加模板任务");
+    }
+
+    function renderTemplateSettingsList() {
+      if (!taskTemplates.length) {
+        els.templateSettingsList.innerHTML = '<div class="special-list"><div class="special-item"><span class="special-dot" style="--special-color:#cbd5e1"></span><span>暂无模板</span></div></div>';
+        return;
+      }
+      els.templateSettingsList.innerHTML = `<div class="special-list">${taskTemplates.map(t => {
+        const cat = getCategory(t.category);
+        return `<div class="special-item">
+          <span class="special-dot" style="--special-color:${cat.color}"></span>
+          <span>${escapeHtml(t.title)} · ${escapeHtml(cat.name)}</span>
+          <button class="mini-btn bad" type="button" onclick="deleteTemplate('${t.id}')">×</button>
+        </div>`;
+      }).join("")}</div>`;
+    }
+
+    function deleteTemplate(id) {
+      taskTemplates = taskTemplates.filter(t => t.id !== id);
+      persistTemplates();
+      renderTemplateSettingsList();
+      renderTemplateStrip(els.taskDate.value);
+    }
+
+    function openBulk(dateKey) {
+      closeModal();
+      const d = dateKey || toKey(new Date());
+      els.bulkTitle.value = els.taskTitle.value.trim();
+      els.bulkCategory.value = els.taskCategory.value || settings.defaultCategory;
+      els.bulkStart.value = d;
+      els.bulkEnd.value = d;
+      els.bulkMonthDay.value = "";
+      els.bulkText.value = "";
+      els.bulkPreview.textContent = "填写后会在这里预览将创建的任务。";
+      lastBulkItems = [];
+      showBackdrop(els.bulkBackdrop);
+    }
+
+    function closeBulk() {
+      hideBackdrop(els.bulkBackdrop);
+      els.bulkForm.reset();
+      lastBulkItems = [];
+    }
+
+    function updateBulkPreview() {
+      lastBulkItems = buildBulkItems();
+      if (!lastBulkItems.length) {
+        els.bulkPreview.textContent = "没有可创建的任务，请检查内容和日期范围。";
+        return;
+      }
+      els.bulkPreview.innerHTML = `<strong>将创建 ${lastBulkItems.length} 条任务</strong><br>` + lastBulkItems.slice(0, 60).map(item => `${item.date} ${escapeHtml(item.title)}`).join("<br>") + (lastBulkItems.length > 60 ? "<br>..." : "");
+    }
+
+    function createBulkTasks(event) {
+      event.preventDefault();
+      const items = lastBulkItems.length ? lastBulkItems : buildBulkItems();
+      if (!items.length) {
+        showToast("没有可创建的任务");
+        return;
+      }
+      const existing = new Set(tasks.map(t => `${t.date}|${t.title}`));
+      const rows = items.filter(item => !existing.has(`${item.date}|${item.title}`)).map(item => ({ id: createId(), title: item.title, date: item.date, category: item.category, note: item.note || "", done: false, createdAt: Date.now() }));
+      tasks = [...rows, ...tasks];
+      persist();
+      closeBulk();
+      renderVisibleWeeks();
+      showToast(`已创建 ${rows.length} 条任务`);
+    }
+
+    function buildBulkItems() {
+      const mode = els.bulkMode.value;
+      const category = els.bulkCategory.value || settings.defaultCategory;
+      const title = els.bulkTitle.value.trim();
+      if (mode === "text") return parseBulkText(category);
+      if (!title) return [];
+      const start = parseKey(els.bulkStart.value || toKey(new Date()));
+      const end = parseKey(els.bulkEnd.value || els.bulkStart.value || toKey(new Date()));
+      if (end < start) return [];
+      const items = [];
+      if (mode === "range") {
+        walkDates(start, end, d => items.push({ title, date: toKey(d), category }));
+      } else if (mode === "weekly") {
+        const weekdays = Array.from(els.bulkWeekdays.selectedOptions).map(o => Number(o.value));
+        const allow = weekdays.length ? weekdays : [start.getDay()];
+        walkDates(start, end, d => { if (allow.includes(d.getDay())) items.push({ title, date: toKey(d), category }); });
+      } else if (mode === "monthly") {
+        const day = clamp(Number(els.bulkMonthDay.value) || start.getDate(), 1, 31);
+        const cur = new Date(start.getFullYear(), start.getMonth(), 1);
+        while (cur <= end) {
+          const last = new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate();
+          const d = new Date(cur.getFullYear(), cur.getMonth(), Math.min(day, last));
+          if (d >= start && d <= end) items.push({ title, date: toKey(d), category });
+          cur.setMonth(cur.getMonth() + 1);
+        }
+      } else if (mode === "interval") {
+        const step = clamp(Number(els.bulkMonthDay.value) || 1, 1, 365);
+        const cur = new Date(start);
+        while (cur <= end) {
+          items.push({ title, date: toKey(cur), category });
+          cur.setDate(cur.getDate() + step);
+        }
+      }
+      return items.slice(0, 500);
+    }
+
+    function parseBulkText(category) {
+      return els.bulkText.value.split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => {
+        const m = line.match(/^(\d{4}-\d{2}-\d{2})\s+(.+)$/);
+        if (m) return { date: m[1], title: m[2].trim(), category };
+        return { date: els.bulkStart.value || toKey(new Date()), title: line, category };
+      }).filter(item => isDateKey(item.date) && item.title).slice(0, 500);
+    }
+
+    function walkDates(start, end, fn) {
+      const cur = new Date(start);
+      while (cur <= end) {
+        fn(new Date(cur));
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+
+    function exportData() {
+      const payload = { tasks, settings, templates: taskTemplates, exportedAt: new Date().toISOString(), app: "极简待办" };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `极简待办_${toKey(new Date())}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      showToast("已导出");
+    }
+
+    function importData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          const incoming = Array.isArray(data) ? data : data.tasks;
+          if (!Array.isArray(incoming)) throw new Error("invalid");
+          const existing = new Set(tasks.map(task => task.id));
+          tasks = [...normalizeTasks(incoming).filter(task => !existing.has(task.id)), ...tasks];
+          if (data.templates) taskTemplates = normalizeTemplates([...data.templates, ...taskTemplates]);
+          if (data.settings) settings = normalizeSettings({ ...settings, ...data.settings });
+          persist();
+          persistTemplates();
+          localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+          applySettings();
+          renderVisibleWeeks();
+          showToast("导入成功");
+        } catch {
+          showToast("导入文件格式不正确");
+        } finally {
+          event.target.value = "";
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function loadTasks() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? normalizeTasks(JSON.parse(raw)) : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function loadTemplates() {
+      try {
+        const raw = localStorage.getItem(TEMPLATES_KEY);
+        return raw ? normalizeTemplates(JSON.parse(raw)) : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function normalizeTemplates(rows) {
+      if (!Array.isArray(rows)) return [];
+      return rows
+        .filter(row => row && (row.title || row.text))
+        .map(row => ({
+          id: row.id || createId(),
+          title: String(row.title || row.text || "").trim(),
+          category: CATEGORIES.some(cat => cat.id === row.category) ? row.category : "work",
+          note: String(row.note || ""),
+          createdAt: Number(row.createdAt) || Date.now()
+        }))
+        .filter(row => row.title);
+    }
+
+    function loadSettings() {
+      try {
+        const raw = localStorage.getItem(SETTINGS_KEY);
+        const parsed = raw ? JSON.parse(raw) : {};
+        if (parsed.version !== DEFAULT_SETTINGS.version && (Number(parsed.dayMinHeight) < 300 || Number(parsed.dayMinHeight) > 600)) {
+          parsed.dayMinHeight = DEFAULT_SETTINGS.dayMinHeight;
+        }
+        return normalizeSettings({ ...DEFAULT_SETTINGS, ...parsed });
+      } catch {
+        return normalizeSettings({ ...DEFAULT_SETTINGS });
+      }
+    }
+
+    function applySettings() {
+      settings = normalizeSettings(settings);
+      const density = DENSITY[settings.taskDensity] || DENSITY.standard;
+      document.documentElement.style.setProperty("--day-min-h", `${settings.dayMinHeight}px`);
+      document.documentElement.style.setProperty("--task-min-h", `${density.taskMinHeight}px`);
+      document.documentElement.style.setProperty("--task-font-size", `${density.taskFontSize}px`);
+      document.documentElement.style.setProperty("--task-pad-x", `${density.taskPadX}px`);
+    }
+
+    function normalizeSettings(value) {
+      const next = { ...DEFAULT_SETTINGS, ...(value || {}) };
+      next.dayMinHeight = clamp(Number(next.dayMinHeight) || DEFAULT_SETTINGS.dayMinHeight, 300, 600);
+      next.version = DEFAULT_SETTINGS.version;
+      next.taskDensity = DENSITY[next.taskDensity] ? next.taskDensity : DEFAULT_SETTINGS.taskDensity;
+      next.taskDisplay = ["title", "category", "note"].includes(next.taskDisplay) ? next.taskDisplay : DEFAULT_SETTINGS.taskDisplay;
+      next.defaultCategory = CATEGORIES.some(cat => cat.id === next.defaultCategory) ? next.defaultCategory : DEFAULT_SETTINGS.defaultCategory;
+      next.otherMonthMode = ["dim", "hideTasks"].includes(next.otherMonthMode) ? next.otherMonthMode : DEFAULT_SETTINGS.otherMonthMode;
+      next.weekendStyle = ["normal", "tint"].includes(next.weekendStyle) ? next.weekendStyle : DEFAULT_SETTINGS.weekendStyle;
+      next.dragEnabled = next.dragEnabled !== false;
+      next.monthTintEnabled = next.monthTintEnabled !== false;
+      next.lunarEnabled = next.lunarEnabled !== false;
+      next.solarTermEnabled = next.solarTermEnabled !== false;
+      next.holidayEnabled = next.holidayEnabled !== false;
+      next.specialDates = Array.isArray(next.specialDates) ? next.specialDates.filter(isValidSpecialDate) : [];
+      next.categories = next.categories && typeof next.categories === "object" ? next.categories : {};
+      return next;
+    }
+
+    function getCategories() {
+      return CATEGORIES.map(cat => {
+        const custom = settings.categories && settings.categories[cat.id] ? settings.categories[cat.id] : {};
+        const color = isHexColor(custom.color) ? custom.color : cat.color;
+        return {
+          ...cat,
+          name: String(custom.name || cat.name).trim() || cat.name,
+          color,
+          bg: hexToSoftBg(color)
+        };
+      });
+    }
+
+    function renderCategorySettings() {
+      els.categorySettings.innerHTML = getCategories().map(cat => `
+        <div class="category-setting" data-cat="${cat.id}">
+          <input type="color" value="${cat.color}" data-cat-color="${cat.id}" aria-label="${cat.name}颜色" />
+          <input type="text" value="${escapeHtml(cat.name)}" data-cat-name="${cat.id}" maxlength="12" />
+        </div>
+      `).join("");
+    }
+
+    function readCategorySettings() {
+      const result = {};
+      CATEGORIES.forEach(cat => {
+        const name = els.categorySettings.querySelector(`[data-cat-name="${cat.id}"]`)?.value.trim();
+        const color = els.categorySettings.querySelector(`[data-cat-color="${cat.id}"]`)?.value;
+        result[cat.id] = {
+          name: name || cat.name,
+          color: isHexColor(color) ? color : cat.color
+        };
+      });
+      return result;
+    }
+
+    function renderSpecialDateList() {
+      if (!settings.specialDates.length) {
+        els.specialDateList.innerHTML = '<div class="special-list"><div class="special-item"><span class="special-dot" style="--special-color:#cbd5e1"></span><span>暂无特殊日期</span></div></div>';
+        return;
+      }
+      els.specialDateList.innerHTML = `<div class="special-list">${settings.specialDates.map(item => `
+        <div class="special-item" data-special-id="${item.id}">
+          <span class="special-dot" style="--special-color:${item.color}"></span>
+          <span>${escapeHtml(item.name)} · ${item.type === "lunar" ? "农历" : "公历"} ${item.month}月${item.day}日</span>
+          <button class="mini-btn bad" type="button" onclick="removeSpecialDate('${item.id}')">×</button>
+        </div>
+      `).join("")}</div>`;
+    }
+
+    function addSpecialDateFromForm() {
+      const item = {
+        id: createId(),
+        type: els.specialType.value === "lunar" ? "lunar" : "solar",
+        month: clamp(Number(els.specialMonth.value) || 0, 1, 12),
+        day: clamp(Number(els.specialDay.value) || 0, 1, 31),
+        name: els.specialName.value.trim() || "特殊日期",
+        color: isHexColor(els.specialColor.value) ? els.specialColor.value : "#8b5cf6"
+      };
+      if (!isValidSpecialDate(item)) {
+        showToast("请填写有效的特殊日期");
+        return;
+      }
+      settings.specialDates = [...settings.specialDates, item];
+      els.specialMonth.value = "";
+      els.specialDay.value = "";
+      els.specialName.value = "";
+      renderSpecialDateList();
+    }
+
+    function removeSpecialDate(id) {
+      settings.specialDates = settings.specialDates.filter(item => item.id !== id);
+      renderSpecialDateList();
+    }
+
+    function isValidSpecialDate(item) {
+      return item && ["solar", "lunar"].includes(item.type) && Number(item.month) >= 1 && Number(item.month) <= 12 && Number(item.day) >= 1 && Number(item.day) <= 31 && typeof item.name === "string" && item.name.trim() && isHexColor(item.color);
+    }
+
+    function renderDateMeta(date, marks) {
+      const lunar = getLunarInfo(date);
+      const lunarText = settings.lunarEnabled && lunar ? `<div class="date-extra"><span class="date-lunar">${escapeHtml(lunar.display)}</span></div>` : "";
+      const badges = marks.map(mark => {
+        const style = mark.kind === "special" ? ` style="--special-color:${mark.color};--special-bg:${hexToSoftBg(mark.color)}"` : "";
+        return `<span class="date-badge ${mark.kind}"${style}>${escapeHtml(mark.name)}</span>`;
+      }).join("");
+      return `${lunarText}${badges ? `<div class="date-badges">${badges}</div>` : ""}`;
+    }
+
+    function getDateMarks(date) {
+      const key = toKey(date);
+      const monthDay = key.slice(5);
+      const marks = [];
+      const lunar = getLunarInfo(date);
+      const holiday = settings.holidayEnabled ? HOLIDAY_2026[key] : null;
+      if (holiday) marks.push({ kind: holiday.type === "workday" ? "workday" : "holiday", name: holiday.name });
+      const solarFestival = SOLAR_FESTIVALS[monthDay];
+      if (solarFestival && !marks.some(mark => mark.name === solarFestival)) marks.push({ kind: "festival", name: solarFestival });
+      if (lunar) {
+        const lunarFestival = LUNAR_FESTIVALS[`${lunar.month}-${lunar.day}`];
+        if (lunarFestival && !marks.some(mark => mark.name === lunarFestival)) marks.push({ kind: "festival", name: lunarFestival });
+      }
+      const term = settings.solarTermEnabled ? getSolarTerm(date) : "";
+      if (term && !marks.some(mark => mark.name === term)) marks.push({ kind: "term", name: term });
+      for (const item of settings.specialDates) {
+        if (matchesSpecialDate(item, date, lunar)) marks.push({ kind: "special", name: item.name, color: item.color });
+      }
+      return marks;
+    }
+
+    function matchesSpecialDate(item, date, lunar) {
+      if (item.type === "solar") return date.getMonth() + 1 === item.month && date.getDate() === item.day;
+      return lunar && lunar.month === item.month && lunar.day === item.day;
+    }
+
+    function getLunarInfo(date) {
+      try {
+        var parts = new Intl.DateTimeFormat("zh-CN-u-ca-chinese", { month: "long", day: "numeric" }).formatToParts(date);
+        var monthName = (parts.find(part => part.type === "month") || {}).value || "";
+        var day = Number((parts.find(part => part.type === "day") || {}).value);
+        var month = LUNAR_MONTH_NUM[monthName.replace("闰", "")];
+        if (!month || !day) return null;
+        var dayName = LUNAR_DAY_NAMES[day - 1] || `${day}`;
+        return { month, day, monthName, dayName, display: day === 1 ? `${monthName}${dayName}` : dayName };
+      } catch {
+        return null;
+      }
+    }
+
+    function getSolarTerm(date) {
+      const y = date.getFullYear();
+      if (y < 1900 || y > 2100) return "";
+      for (let i = 0; i < SOLAR_TERM_INFO.length; i++) {
+        const termDate = new Date(31556925974.7 * (y - 1900) + SOLAR_TERM_INFO[i] * 60000 + Date.UTC(1900, 0, 6, 2, 5));
+        if (termDate.getMonth() === date.getMonth() && termDate.getDate() === date.getDate()) {
+          return SOLAR_TERM_NAMES[i];
+        }
+      }
+      return "";
+    }
+
+    function hexToSoftBg(hex) {
+      const clean = isHexColor(hex) ? hex.slice(1) : "2563eb";
+      const r = parseInt(clean.slice(0, 2), 16);
+      const g = parseInt(clean.slice(2, 4), 16);
+      const b = parseInt(clean.slice(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, .12)`;
+    }
+
+    function isHexColor(value) {
+      return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value);
+    }
+
+    function normalizeTasks(rows) {
+      if (!Array.isArray(rows)) return [];
+      return rows
+        .filter(row => row && row.title)
+        .map(row => ({
+          id: row.id || createId(),
+          title: String(row.title || row.text || "").trim(),
+          date: isDateKey(row.date) ? row.date : toKey(new Date()),
+          category: CATEGORIES.some(cat => cat.id === row.category) ? row.category : (CATEGORIES.some(cat => cat.id === row.cat) ? row.cat : "work"),
+          note: String(row.note || ""),
+          done: Boolean(row.done),
+          createdAt: Number(row.createdAt) || Date.now()
+        }))
+        .filter(row => row.title);
+    }
+
+    function persist() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    }
+
+    function persistTemplates() {
+      localStorage.setItem(TEMPLATES_KEY, JSON.stringify(taskTemplates));
+    }
+
+    function getCategory(id) {
+      return getCategories().find(cat => cat.id === id) || getCategories()[0];
+    }
+
+    function getWeekDates(monday) {
+      const dates = [];
+      const start = getMonday(monday);
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(start);
+        date.setDate(start.getDate() + i);
+        dates.push(date);
+      }
+      return dates;
+    }
+
+    function getMonday(date) {
+      const d = new Date(date);
+      d.setHours(0, 0, 0, 0);
+      const day = d.getDay() || 7;
+      d.setDate(d.getDate() - day + 1);
+      return d;
+    }
+
+    function toKey(date) {
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    }
+
+    function parseKey(key) {
+      const [year, month, day] = key.split("-").map(Number);
+      return new Date(year, month - 1, day);
+    }
+
+    function isDateKey(value) {
+      return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+    }
+
+    function isToday(date) {
+      return toKey(date) === toKey(new Date());
+    }
+
+    function createId() {
+      return `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function getStickyOffset() {
+      const topbar = document.querySelector(".topbar").getBoundingClientRect().height;
+      const weekday = window.matchMedia("(max-width: 720px)").matches ? 0 : document.querySelector(".weekday").getBoundingClientRect().height;
+      return topbar + weekday;
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      }[char]));
+    }
+
+    function showToast(message) {
+      els.toast.textContent = message;
+      els.toast.classList.add("show");
+      clearTimeout(showToast.timer);
+      showToast.timer = setTimeout(() => els.toast.classList.remove("show"), 1600);
+    }
+
+    function throttle(fn, wait) {
+      let timer = null;
+      return function throttled() {
+        if (timer) return;
+        timer = setTimeout(() => {
+          timer = null;
+          fn();
+        }, wait);
+      };
+    }
+  </script>
+</body>
+</html>
