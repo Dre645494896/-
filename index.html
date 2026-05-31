@@ -134,6 +134,24 @@
       flex-wrap: wrap;
     }
 
+    .account-pill {
+      min-height: 38px;
+      max-width: 180px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-soft);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     .btn {
       min-height: 38px;
       border: 1px solid var(--line);
@@ -639,6 +657,19 @@
       justify-content: flex-end;
       gap: 8px;
       margin-top: 16px;
+      flex-wrap: wrap;
+    }
+
+    .auth-status {
+      min-height: 32px;
+      display: flex;
+      align-items: center;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel-soft);
+      color: var(--muted);
+      font-size: 13px;
     }
 
     .settings-grid {
@@ -981,6 +1012,8 @@
     </div>
 
     <div class="actions">
+      <span class="account-pill" id="accountStatus">本地模式</span>
+      <button class="btn" id="authBtn">登录</button>
       <button class="btn" id="settingsBtn">设置</button>
       <button class="btn" id="exportBtn">导出</button>
       <button class="btn" id="importBtn">导入</button>
@@ -1164,12 +1197,47 @@
             <button class="btn" type="button" id="settingsImportBtn">导入数据</button>
             <button class="btn" type="button" id="clearDoneBtn">清理已完成</button>
           </div>
-          <p class="setting-help">数据保存在当前浏览器本地。清理已完成会删除所有已完成事项。</p>
+          <div class="category-settings">
+            <div class="category-settings-title">账号与云同步</div>
+            <div class="settings-two">
+              <div class="setting-field">
+                <label for="supabaseUrl">Supabase URL</label>
+                <input id="supabaseUrl" type="url" placeholder="https://xxxx.supabase.co" />
+              </div>
+              <div class="setting-field">
+                <label for="supabaseAnonKey">Supabase anon key</label>
+                <input id="supabaseAnonKey" type="password" placeholder="eyJ..." />
+              </div>
+            </div>
+            <div class="modal-actions">
+              <button class="btn" type="button" id="saveCloudConfigBtn">保存云端配置</button>
+              <button class="btn" type="button" id="syncNowBtn">立即同步</button>
+            </div>
+            <p class="setting-help" id="cloudHelp">未配置 Supabase 时，数据只保存在当前浏览器本地。</p>
+          </div>
+          <p class="setting-help">清理已完成会删除所有已完成事项；导入导出仍可作为离线备份。</p>
         </div>
       </div>
       <div class="modal-actions">
         <button class="btn" type="button" id="settingsCancelBtn">取消</button>
         <button class="btn primary" type="submit">保存</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="modal-backdrop" id="authBackdrop">
+    <form class="modal" id="authForm">
+      <h2>账号登录</h2>
+      <div class="modal-grid">
+        <div class="auth-status" id="authStatusText">登录后会把任务、模板和设置同步到云端。</div>
+        <input id="authEmail" type="email" placeholder="邮箱" autocomplete="email" />
+        <input id="authPassword" type="password" placeholder="密码，至少 6 位" autocomplete="current-password" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn" type="button" id="logoutBtn">退出登录</button>
+        <button class="btn" type="button" id="authCancelBtn">取消</button>
+        <button class="btn" type="button" id="signupBtn">注册</button>
+        <button class="btn primary" type="submit">登录</button>
       </div>
     </form>
   </div>
@@ -1243,6 +1311,11 @@
     const STORAGE_KEY = "jijiandaiban_tasks_v1";
     const SETTINGS_KEY = "jijiandaiban_settings_v1";
     const TEMPLATES_KEY = "jijiandaiban_templates_v1";
+    const SUPABASE_URL_KEY = "jijiandaiban_supabase_url";
+    const SUPABASE_ANON_KEY_KEY = "jijiandaiban_supabase_anon_key";
+    const SUPABASE_SESSION_KEY = "jijiandaiban_supabase_session";
+    const SUPABASE_URL = "https://dnmszveczfcrbtzdehoj.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_xpfvWZRVFu72lD_cnXBdZw_sBDxBQPA";
     const DEFAULT_SETTINGS = {
       version: 4,
       dayMinHeight: 360,
@@ -1343,12 +1416,18 @@
     let settings = loadSettings();
     let taskTemplates = loadTemplates();
     let lastBulkItems = [];
+    let supabaseClient = null;
+    let currentUser = null;
+    let cloudReady = false;
+    let cloudSaveTimer = null;
+    let cloudLoading = false;
 
     const els = {
       monthLabel: document.getElementById("monthLabel"),
       weeks: document.getElementById("weeks"),
       topSentinel: document.getElementById("topSentinel"),
       bottomSentinel: document.getElementById("bottomSentinel"),
+      accountStatus: document.getElementById("accountStatus"),
       searchInput: document.getElementById("searchInput"),
       categoryFilter: document.getElementById("categoryFilter"),
       statusFilter: document.getElementById("statusFilter"),
@@ -1375,6 +1454,11 @@
       bulkPreview: document.getElementById("bulkPreview"),
       settingsBackdrop: document.getElementById("settingsBackdrop"),
       settingsForm: document.getElementById("settingsForm"),
+      authBackdrop: document.getElementById("authBackdrop"),
+      authForm: document.getElementById("authForm"),
+      authStatusText: document.getElementById("authStatusText"),
+      authEmail: document.getElementById("authEmail"),
+      authPassword: document.getElementById("authPassword"),
       dayHeightRange: document.getElementById("dayHeightRange"),
       dayHeightInput: document.getElementById("dayHeightInput"),
       taskDensity: document.getElementById("taskDensity"),
@@ -1395,6 +1479,9 @@
       specialColor: document.getElementById("specialColor"),
       categorySettings: document.getElementById("categorySettings"),
       templateSettingsList: document.getElementById("templateSettingsList"),
+      supabaseUrl: document.getElementById("supabaseUrl"),
+      supabaseAnonKey: document.getElementById("supabaseAnonKey"),
+      cloudHelp: document.getElementById("cloudHelp"),
       toast: document.getElementById("toast")
     };
 
@@ -1406,10 +1493,12 @@
       bindEvents();
       renderAround(new Date());
       setupInfiniteScroll();
+      initCloud();
       setTimeout(() => scrollToDate(new Date(), false), 60);
     }
 
     function bindEvents() {
+      document.getElementById("authBtn").addEventListener("click", openAuth);
       document.getElementById("prevMonthBtn").addEventListener("click", () => jumpMonth(-1));
       document.getElementById("nextMonthBtn").addEventListener("click", () => jumpMonth(1));
       document.getElementById("currentMonthBtn").addEventListener("click", goCurrentMonth);
@@ -1433,6 +1522,12 @@
       els.taskForm.addEventListener("submit", saveModalTask);
       els.bulkForm.addEventListener("submit", createBulkTasks);
       els.settingsForm.addEventListener("submit", saveSettings);
+      els.authForm.addEventListener("submit", signIn);
+      document.getElementById("signupBtn").addEventListener("click", signUp);
+      document.getElementById("logoutBtn").addEventListener("click", signOut);
+      document.getElementById("authCancelBtn").addEventListener("click", closeAuth);
+      document.getElementById("saveCloudConfigBtn").addEventListener("click", saveCloudConfig);
+      document.getElementById("syncNowBtn").addEventListener("click", syncNow);
       els.dayHeightRange.addEventListener("input", event => syncDayHeight(event.target.value));
       els.dayHeightInput.addEventListener("input", event => syncDayHeight(event.target.value));
       document.getElementById("addSpecialDateBtn").addEventListener("click", addSpecialDateFromForm);
@@ -1446,11 +1541,15 @@
       els.bulkBackdrop.addEventListener("click", event => {
         if (event.target === els.bulkBackdrop) closeBulk();
       });
+      els.authBackdrop.addEventListener("click", event => {
+        if (event.target === els.authBackdrop) closeAuth();
+      });
       document.addEventListener("keydown", event => {
         if (event.key === "Escape") {
           closeModal();
           closeSettings();
           closeBulk();
+          closeAuth();
         }
       });
       document.addEventListener("dragstart", handleDragStart);
@@ -1832,6 +1931,9 @@
       els.lunarEnabled.value = String(settings.lunarEnabled);
       els.solarTermEnabled.value = String(settings.solarTermEnabled);
       els.holidayEnabled.value = String(settings.holidayEnabled);
+      els.supabaseUrl.value = localStorage.getItem(SUPABASE_URL_KEY) || SUPABASE_URL || "";
+      els.supabaseAnonKey.value = localStorage.getItem(SUPABASE_ANON_KEY_KEY) || SUPABASE_ANON_KEY || "";
+      updateCloudUi();
       activateSettingsTab("appearance");
       renderCategorySettings();
       renderSpecialDateList();
@@ -1842,6 +1944,17 @@
     function closeSettings() {
       hideBackdrop(els.settingsBackdrop);
       syncDayHeight(settings.dayMinHeight);
+    }
+
+    function openAuth() {
+      updateCloudUi();
+      showBackdrop(els.authBackdrop);
+      setTimeout(() => els.authEmail.focus(), 0);
+    }
+
+    function closeAuth() {
+      hideBackdrop(els.authBackdrop);
+      els.authForm.reset();
     }
 
     function showBackdrop(el) {
@@ -1889,6 +2002,7 @@
       settings.categories = readCategorySettings();
       applySettings();
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      queueCloudSave();
       renderSelects();
       renderVisibleWeeks();
       els.settingsBackdrop.classList.remove("show");
@@ -2136,6 +2250,7 @@
           persist();
           persistTemplates();
           localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+          queueCloudSave();
           applySettings();
           renderVisibleWeeks();
           showToast("导入成功");
@@ -2146,6 +2261,260 @@
         }
       };
       reader.readAsText(file);
+    }
+
+    async function initCloud() {
+      updateCloudUi();
+      const { url, anonKey } = getCloudConfig();
+      if (!url || !anonKey) return;
+      try {
+        supabaseClient = { url, anonKey, session: loadCloudSession() };
+        cloudReady = true;
+        currentUser = supabaseClient.session?.user || null;
+        updateCloudUi();
+        if (currentUser) await loadCloudData();
+      } catch (error) {
+        cloudReady = false;
+        showToast("云同步初始化失败");
+        console.error(error);
+        updateCloudUi();
+      }
+    }
+
+    function saveCloudConfig() {
+      const url = els.supabaseUrl.value.trim();
+      const anonKey = els.supabaseAnonKey.value.trim();
+      if (!url || !anonKey) {
+        showToast("请填写 Supabase URL 和 anon key");
+        return;
+      }
+      localStorage.setItem(SUPABASE_URL_KEY, url);
+      localStorage.setItem(SUPABASE_ANON_KEY_KEY, anonKey);
+      supabaseClient = null;
+      currentUser = null;
+      cloudReady = false;
+      initCloud();
+      showToast("云端配置已保存");
+    }
+
+    async function signIn(event) {
+      event.preventDefault();
+      if (!ensureCloudClient()) return;
+      const email = els.authEmail.value.trim();
+      const password = els.authPassword.value;
+      if (!email || !password) return showToast("请填写邮箱和密码");
+      try {
+        const session = await cloudRequest("/auth/v1/token?grant_type=password", {
+          method: "POST",
+          body: JSON.stringify({ email, password })
+        }, false);
+        setCloudSession(session);
+        await loadCloudData();
+      } catch (error) {
+        return showToast(error.message || "登录失败");
+      }
+      closeAuth();
+      showToast("已登录");
+    }
+
+    async function signUp() {
+      if (!ensureCloudClient()) return;
+      const email = els.authEmail.value.trim();
+      const password = els.authPassword.value;
+      if (!email || password.length < 6) return showToast("请填写邮箱和至少 6 位密码");
+      try {
+        const session = await cloudRequest("/auth/v1/signup", {
+          method: "POST",
+          body: JSON.stringify({ email, password })
+        }, false);
+        if (session?.access_token) {
+          setCloudSession(session);
+          await loadCloudData();
+          closeAuth();
+          showToast("注册并登录成功");
+        } else {
+          showToast("注册成功，请按邮箱验证要求完成登录");
+        }
+      } catch (error) {
+        showToast(error.message || "注册失败");
+      }
+    }
+
+    async function signOut() {
+      if (!ensureCloudClient()) return;
+      localStorage.removeItem(SUPABASE_SESSION_KEY);
+      if (supabaseClient) supabaseClient.session = null;
+      currentUser = null;
+      updateCloudUi();
+      closeAuth();
+      showToast("已退出登录，继续使用本地数据");
+    }
+
+    async function syncNow() {
+      if (!ensureCloudClient() || !currentUser) {
+        showToast("请先登录账号");
+        return;
+      }
+      await saveCloudData();
+      showToast("已同步到云端");
+    }
+
+    function ensureCloudClient() {
+      if (supabaseClient && cloudReady) return true;
+      const { url, anonKey } = getCloudConfig();
+      if (!url || !anonKey) {
+        showToast("请先在设置中保存 Supabase 配置");
+        openSettings();
+        activateSettingsTab("data");
+        return false;
+      }
+      supabaseClient = { url, anonKey, session: loadCloudSession() };
+      currentUser = supabaseClient.session?.user || null;
+      cloudReady = true;
+      updateCloudUi();
+      return true;
+    }
+
+    async function loadCloudData() {
+      if (!supabaseClient || !currentUser) return;
+      cloudLoading = true;
+      try {
+        const rows = await cloudRequest(`/rest/v1/todo_data?user_id=eq.${encodeURIComponent(currentUser.id)}&select=tasks,settings,templates`, {
+          method: "GET"
+        }, true);
+        const data = Array.isArray(rows) ? rows[0] : rows;
+        if (data) {
+          tasks = normalizeTasks(data.tasks || []);
+          settings = normalizeSettings({ ...DEFAULT_SETTINGS, ...(data.settings || {}) });
+          taskTemplates = normalizeTemplates(data.templates || []);
+          saveLocalSnapshot();
+          applySettings();
+          renderSelects();
+          renderAround(new Date(currentYear, currentMonth, 1));
+          showToast("已加载云端数据");
+        } else if (tasks.length || taskTemplates.length) {
+          await saveCloudData();
+          showToast("已把本地数据迁移到云端");
+        }
+      } catch (error) {
+        showToast("云端数据读取失败");
+        console.error(error);
+      } finally {
+        cloudLoading = false;
+        updateCloudUi();
+      }
+    }
+
+    function queueCloudSave() {
+      if (cloudLoading || !supabaseClient || !currentUser) return;
+      clearTimeout(cloudSaveTimer);
+      cloudSaveTimer = setTimeout(() => saveCloudData(), 700);
+    }
+
+    async function saveCloudData() {
+      if (!supabaseClient || !currentUser) return;
+      const payload = {
+        user_id: currentUser.id,
+        tasks,
+        settings,
+        templates: taskTemplates,
+        updated_at: new Date().toISOString()
+      };
+      try {
+        await cloudRequest("/rest/v1/todo_data?on_conflict=user_id", {
+          method: "POST",
+          headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+          body: JSON.stringify(payload)
+        }, true);
+      } catch (error) {
+        showToast("云同步失败");
+        console.error(error);
+        return;
+      }
+      updateCloudUi();
+    }
+
+    function getCloudConfig() {
+      const url = (localStorage.getItem(SUPABASE_URL_KEY) || SUPABASE_URL || "").replace(/\/+$/, "");
+      const anonKey = localStorage.getItem(SUPABASE_ANON_KEY_KEY) || SUPABASE_ANON_KEY || "";
+      return { url, anonKey };
+    }
+
+    function loadCloudSession() {
+      try {
+        const raw = localStorage.getItem(SUPABASE_SESSION_KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function setCloudSession(session) {
+      if (!session?.access_token) throw new Error("登录响应无效");
+      session.expires_at_ms = Date.now() + Math.max(Number(session.expires_in || 3600) - 60, 60) * 1000;
+      localStorage.setItem(SUPABASE_SESSION_KEY, JSON.stringify(session));
+      supabaseClient.session = session;
+      currentUser = session.user || currentUser;
+      updateCloudUi();
+    }
+
+    async function refreshCloudSession() {
+      const session = supabaseClient?.session || loadCloudSession();
+      if (!session?.refresh_token) return null;
+      if (session.expires_at_ms && session.expires_at_ms > Date.now()) return session;
+      const refreshed = await cloudRequest("/auth/v1/token?grant_type=refresh_token", {
+        method: "POST",
+        body: JSON.stringify({ refresh_token: session.refresh_token })
+      }, false);
+      setCloudSession(refreshed);
+      return refreshed;
+    }
+
+    async function cloudRequest(path, options = {}, needAuth = true) {
+      if (!supabaseClient) ensureCloudClient();
+      const session = needAuth ? await refreshCloudSession() : null;
+      const headers = {
+        apikey: supabaseClient.anonKey,
+        Authorization: `Bearer ${needAuth ? session?.access_token : supabaseClient.anonKey}`,
+        "Content-Type": "application/json",
+        ...(options.headers || {})
+      };
+      const response = await fetch(`${supabaseClient.url}${path}`, { ...options, headers });
+      if (!response.ok) {
+        let message = `${response.status} ${response.statusText}`;
+        try {
+          const data = await response.json();
+          message = data.msg || data.message || data.error_description || message;
+        } catch {}
+        throw new Error(message);
+      }
+      if (response.status === 204) return null;
+      const text = await response.text();
+      return text ? JSON.parse(text) : null;
+    }
+
+    function saveLocalSnapshot() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      localStorage.setItem(TEMPLATES_KEY, JSON.stringify(taskTemplates));
+    }
+
+    function updateCloudUi() {
+      const { url, anonKey } = getCloudConfig();
+      const configured = Boolean(url && anonKey);
+      const text = currentUser ? `云同步：${currentUser.email || "已登录"}` : (configured ? "云同步：未登录" : "本地模式");
+      els.accountStatus.textContent = text;
+      document.getElementById("authBtn").textContent = currentUser ? "账号" : "登录";
+      if (els.authStatusText) {
+        els.authStatusText.textContent = currentUser
+          ? `当前账号：${currentUser.email || currentUser.id}`
+          : (configured ? "登录后会把任务、模板和设置同步到云端。" : "请先在设置的数据页填写 Supabase URL 和 anon key。");
+      }
+      if (els.cloudHelp) {
+        els.cloudHelp.textContent = currentUser
+          ? `已登录 ${currentUser.email || ""}，保存操作会自动同步。`
+          : (configured ? "云端配置已保存，登录账号后开始同步。" : "未配置 Supabase 时，数据只保存在当前浏览器本地。");
+      }
     }
 
     function loadTasks() {
@@ -2391,10 +2760,12 @@
 
     function persist() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+      queueCloudSave();
     }
 
     function persistTemplates() {
       localStorage.setItem(TEMPLATES_KEY, JSON.stringify(taskTemplates));
+      queueCloudSave();
     }
 
     function getCategory(id) {
