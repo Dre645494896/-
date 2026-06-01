@@ -121,7 +121,7 @@
       padding: 0 10px;
     }
 
-    .search:focus, .select:focus, .task-input:focus, .modal :is(textarea, input, select):focus {
+    .search:focus, .select:focus, .task-input:focus, .modal :is(textarea, input, select, [contenteditable="true"]):focus {
       border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
     }
@@ -726,8 +726,29 @@
     }
 
     #taskTitle {
-      min-height: 46px;
-      resize: none;
+      min-height: 180px;
+      padding: 12px;
+      resize: vertical;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    #taskTitle:empty::before {
+      content: attr(data-placeholder);
+      color: var(--quiet);
+      pointer-events: none;
+    }
+
+    #taskTitle img {
+      display: block;
+      max-width: 100%;
+      max-height: 260px;
+      object-fit: contain;
+      margin: 8px 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
     }
 
     .modal-row {
@@ -1223,16 +1244,12 @@
     <form class="modal" id="taskForm">
       <h2 id="modalTitle">新任务</h2>
       <div class="modal-grid">
-        <textarea id="taskTitle" placeholder="任务标题" maxlength="500"></textarea>
+        <div id="taskTitle" class="paste-zone" contenteditable="true" data-placeholder="输入任务内容，或在这里按 Ctrl+V 粘贴图片/文字"></div>
         <div class="modal-row">
           <input id="taskDate" type="date" required />
           <select id="taskCategory"></select>
         </div>
         <input id="taskNote" type="text" placeholder="备注，可选" maxlength="120" />
-        <div class="paste-zone" id="pasteZone" tabindex="0">
-          <span class="paste-zone-hint" id="pasteHint">在这里按 Ctrl+V 粘贴文字或图片，内容会按粘贴顺序保存。</span>
-          <div class="content-blocks" id="contentBlocks"></div>
-        </div>
         <label class="template-save">
           <input id="saveTemplateCheck" type="checkbox" />
           保存为模板
@@ -1633,9 +1650,9 @@
       taskDate: document.getElementById("taskDate"),
       taskCategory: document.getElementById("taskCategory"),
       taskNote: document.getElementById("taskNote"),
-      pasteZone: document.getElementById("pasteZone"),
-      pasteHint: document.getElementById("pasteHint"),
-      contentBlocks: document.getElementById("contentBlocks"),
+      pasteZone: document.getElementById("taskTitle"),
+      pasteHint: null,
+      contentBlocks: document.getElementById("taskTitle"),
       saveTemplateCheck: document.getElementById("saveTemplateCheck"),
       templateStrip: document.getElementById("templateStrip"),
       bulkBackdrop: document.getElementById("bulkBackdrop"),
@@ -1859,7 +1876,7 @@
       const showCategory = settings.taskDisplay === "category" || settings.taskDisplay === "note";
       const showNote = settings.taskDisplay === "note" && task.note;
       const blocks = getTaskBlocks(task);
-      const visibleBlocks = blocks.slice(0, 3);
+      const visibleBlocks = blocks.filter(block => block.type === "image").slice(0, 3);
       const hasImage = blocks.some(block => block.type === "image");
       return `<div class="task ${task.done ? "done" : ""} ${hasImage ? "has-image" : ""}" draggable="${settings.dragEnabled ? "true" : "false"}" data-task-id="${task.id}" data-task-date="${task.date}" style="--cat-color:${cat.color};--cat-bg:${cat.bg}" ondblclick="event.stopPropagation();openModal('${task.date}','${task.id}')">
         <div class="task-main">
@@ -2237,11 +2254,11 @@
       editingId = id || null;
       const task = tasks.find(item => item.id === editingId);
       els.modalTitle.textContent = task ? "编辑任务" : "新任务";
-      els.taskTitle.value = task ? task.title : "";
       els.taskDate.value = task ? task.date : dateKey || toKey(new Date());
       els.taskCategory.value = task ? task.category : settings.defaultCategory;
       els.taskNote.value = task ? task.note || "" : "";
       pendingBlocks = task ? getTaskBlocks(task).map(block => ({ ...block })) : [];
+      if (task && !pendingBlocks.length && task.title) pendingBlocks = [{ type: "text", text: task.title }];
       renderContentBlocks();
       els.saveTemplateCheck.checked = false;
       renderTemplateStrip(els.taskDate.value);
@@ -2376,8 +2393,9 @@
 
     function saveModalTask(event) {
       event.preventDefault();
+      pendingBlocks = readEditorBlocks();
       const payload = {
-        title: els.taskTitle.value.trim(),
+        title: deriveTitleFromBlocks(pendingBlocks),
         date: els.taskDate.value,
         category: els.taskCategory.value,
         note: els.taskNote.value.trim(),
@@ -2432,7 +2450,7 @@
           const file = item.getAsFile();
           if (file) {
             const image = await compressImage(file);
-            pendingBlocks.push({ type: "image", ...image });
+            insertEditorImage(image);
             added++;
           }
         }
@@ -2440,37 +2458,100 @@
       const text = cleanPastedText(event.clipboardData?.getData("text/plain"));
       if (text) {
         event.preventDefault();
-        pendingBlocks.push({ type: "text", text });
-        if (!els.taskTitle.value.trim()) els.taskTitle.value = text.split(/\r?\n/)[0].slice(0, 80);
+        insertEditorText(text);
         added++;
       }
       if (added) {
-        renderContentBlocks();
+        pendingBlocks = readEditorBlocks();
         showToast(`已粘贴 ${added} 项内容`);
       }
     }
 
     function renderContentBlocks() {
       pendingBlocks = normalizeContentBlocks(pendingBlocks);
-      els.pasteZone.classList.toggle("is-ready", pendingBlocks.length > 0);
-      els.pasteHint.textContent = pendingBlocks.length
-        ? "已粘贴内容，可继续粘贴或移除单项。"
-        : "在这里按 Ctrl+V 粘贴文字或图片，内容会按粘贴顺序保存。";
-      els.contentBlocks.innerHTML = pendingBlocks.map((block, index) => {
-        const body = block.type === "image"
-          ? `<img src="${escapeAttr(block.src)}" alt="粘贴图片 ${index + 1}" />`
-          : `<p>${escapeHtml(block.text || "")}</p>`;
-        return `<div class="content-block">
-          ${body}
-          <div class="content-block-actions"><button class="mini-btn bad" type="button" onclick="removeContentBlock(${index})">×</button></div>
-        </div>`;
+      els.taskTitle.innerHTML = pendingBlocks.map(block => {
+        if (block.type === "image") return `<img src="${escapeAttr(block.src)}" alt="粘贴图片" data-content-image="true" />`;
+        return escapeHtml(block.text || "").replace(/\n/g, "<br>");
       }).join("");
+      els.taskTitle.classList.toggle("is-ready", pendingBlocks.length > 0);
     }
 
     function removeContentBlock(index) {
       pendingBlocks.splice(index, 1);
       renderContentBlocks();
       showToast("已移除内容");
+    }
+
+    function insertEditorText(text) {
+      els.taskTitle.focus();
+      document.execCommand("insertText", false, text);
+    }
+
+    function insertEditorImage(image) {
+      els.taskTitle.focus();
+      const img = document.createElement("img");
+      img.src = image.src;
+      img.alt = "粘贴图片";
+      img.dataset.contentImage = "true";
+      img.dataset.width = image.width;
+      img.dataset.height = image.height;
+      img.dataset.mime = image.mime || image.type || "image/webp";
+      insertNodeAtCursor(img);
+      insertNodeAtCursor(document.createElement("br"));
+    }
+
+    function insertNodeAtCursor(node) {
+      const selection = window.getSelection();
+      if (!selection || !selection.rangeCount) {
+        els.taskTitle.appendChild(node);
+        return;
+      }
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(node);
+      range.setStartAfter(node);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    function readEditorBlocks() {
+      const blocks = [];
+      let textBuffer = "";
+      const flushText = () => {
+        const text = cleanPastedText(textBuffer);
+        if (text) blocks.push({ type: "text", text });
+        textBuffer = "";
+      };
+      const walk = node => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          textBuffer += node.textContent || "";
+          return;
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+        if (node.tagName === "IMG" && node.src?.startsWith("data:image/")) {
+          flushText();
+          blocks.push({
+            type: "image",
+            src: node.src,
+            width: Number(node.dataset.width) || node.naturalWidth || 0,
+            height: Number(node.dataset.height) || node.naturalHeight || 0,
+            mime: node.dataset.mime || "image/webp",
+            createdAt: Date.now()
+          });
+          return;
+        }
+        if (node.tagName === "BR") {
+          textBuffer += "\n";
+          return;
+        }
+        if (["DIV", "P"].includes(node.tagName) && textBuffer && !textBuffer.endsWith("\n")) textBuffer += "\n";
+        [...node.childNodes].forEach(walk);
+        if (["DIV", "P"].includes(node.tagName)) textBuffer += "\n";
+      };
+      [...els.taskTitle.childNodes].forEach(walk);
+      flushText();
+      return normalizeContentBlocks(blocks);
     }
 
     function cleanPastedText(value) {
@@ -2539,7 +2620,8 @@
     function fillTemplate(id) {
       const t = taskTemplates.find(item => item.id === id);
       if (!t) return;
-      els.taskTitle.value = t.title;
+      pendingBlocks = normalizeContentBlocks([{ type: "text", text: t.title }]);
+      renderContentBlocks();
       els.taskCategory.value = t.category;
       els.taskNote.value = t.note || "";
       showToast("已填入模板");
@@ -2578,7 +2660,7 @@
     }
 
     function openBulk(dateKey) {
-      const currentTitle = els.taskTitle.value.trim();
+      const currentTitle = deriveTitleFromBlocks(readEditorBlocks());
       const currentCategory = els.taskCategory.value || settings.defaultCategory;
       closeModal();
       const d = dateKey || toKey(new Date());
