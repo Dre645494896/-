@@ -152,6 +152,24 @@
       white-space: nowrap;
     }
 
+    .account-pill.syncing {
+      color: #1d4ed8;
+      background: #eaf1ff;
+      border-color: #bfdbfe;
+    }
+
+    .account-pill.synced {
+      color: #047857;
+      background: #ecfdf5;
+      border-color: #a7f3d0;
+    }
+
+    .account-pill.error {
+      color: #b91c1c;
+      background: #fff1f2;
+      border-color: #fecaca;
+    }
+
     .btn {
       min-height: 38px;
       border: 1px solid var(--line);
@@ -466,6 +484,13 @@
       transition: box-shadow .15s ease, transform .15s ease, opacity .15s ease;
     }
 
+    .task.has-image {
+      align-items: stretch;
+      grid-template-columns: minmax(0, 1fr);
+      padding: 6px;
+      gap: 6px;
+    }
+
     .task:hover {
       box-shadow: 0 4px 14px rgba(31, 41, 51, .08);
     }
@@ -473,6 +498,13 @@
     .task.dragging {
       opacity: .45;
       cursor: grabbing;
+    }
+
+    .drop-marker {
+      height: 3px;
+      border-radius: 999px;
+      background: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
     }
 
     body.dragging-task {
@@ -498,6 +530,32 @@
       font-size: var(--task-font-size);
       line-height: 1.25;
       font-weight: 700;
+    }
+
+    .task-image {
+      width: 100%;
+      max-height: 260px;
+      object-fit: contain;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, .72);
+      border: 1px solid rgba(148, 163, 184, .22);
+    }
+
+    .task.has-image .task-main {
+      display: grid;
+      gap: 5px;
+    }
+
+    .task.has-image .task-title {
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
+    .task.has-image .task-actions {
+      opacity: 1;
+      justify-content: flex-start;
     }
 
     .task-main {
@@ -845,6 +903,48 @@
       background: #fbfcfd;
     }
 
+    .paste-zone {
+      display: grid;
+      gap: 8px;
+      min-height: 78px;
+      padding: 10px;
+      border: 1px dashed var(--line-strong);
+      border-radius: var(--radius);
+      background: #fbfcfd;
+      color: var(--muted);
+      font-size: 12px;
+      transition: border-color .16s ease, background .16s ease, color .16s ease;
+    }
+
+    .paste-zone:focus-within,
+    .paste-zone.is-ready {
+      border-color: var(--primary);
+      background: #f5f8ff;
+      color: var(--text);
+    }
+
+    .paste-zone button {
+      justify-self: start;
+    }
+
+    .image-preview {
+      display: none;
+      gap: 8px;
+    }
+
+    .image-preview.show {
+      display: grid;
+    }
+
+    .image-preview img {
+      width: min(100%, 360px);
+      max-height: 220px;
+      object-fit: contain;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+    }
+
     .template-save {
       display: inline-flex;
       align-items: center;
@@ -1042,12 +1142,19 @@
     <form class="modal" id="taskForm">
       <h2 id="modalTitle">新任务</h2>
       <div class="modal-grid">
-        <textarea id="taskTitle" placeholder="任务内容" required maxlength="500"></textarea>
+        <textarea id="taskTitle" placeholder="任务内容，可直接粘贴文字或图片" maxlength="500"></textarea>
         <div class="modal-row">
           <input id="taskDate" type="date" required />
           <select id="taskCategory"></select>
         </div>
         <input id="taskNote" type="text" placeholder="备注，可选" maxlength="120" />
+        <div class="paste-zone" id="pasteZone" tabindex="0">
+          <span id="pasteHint">打开后会尝试读取剪贴板；也可以在这里按 Ctrl+V 粘贴图片或文字。</span>
+          <div class="image-preview" id="imagePreview">
+            <img id="imagePreviewImg" alt="已粘贴的图片预览" />
+            <button class="btn" type="button" id="clearImageBtn">移除图片</button>
+          </div>
+        </div>
         <label class="template-save">
           <input id="saveTemplateCheck" type="checkbox" />
           保存为模板
@@ -1171,7 +1278,7 @@
               <select id="defaultCategory" class="select"></select>
             </div>
             <div class="setting-field">
-              <label for="dragEnabled">跨天拖拽</label>
+              <label for="dragEnabled">拖拽移动/排序</label>
               <select id="dragEnabled" class="select">
                 <option value="true">开启</option>
                 <option value="false">关闭</option>
@@ -1412,7 +1519,9 @@
     let editingId = null;
     let loadingMore = false;
     let draggingTaskId = null;
+    let dropBeforeTaskId = null;
     let mouseDrag = null;
+    let pendingImage = null;
     let settings = loadSettings();
     let taskTemplates = loadTemplates();
     let lastBulkItems = [];
@@ -1421,6 +1530,8 @@
     let cloudReady = false;
     let cloudSaveTimer = null;
     let cloudLoading = false;
+    let cloudStatus = "idle";
+    let lastCloudSyncAt = 0;
 
     const els = {
       monthLabel: document.getElementById("monthLabel"),
@@ -1439,6 +1550,10 @@
       taskDate: document.getElementById("taskDate"),
       taskCategory: document.getElementById("taskCategory"),
       taskNote: document.getElementById("taskNote"),
+      pasteZone: document.getElementById("pasteZone"),
+      pasteHint: document.getElementById("pasteHint"),
+      imagePreview: document.getElementById("imagePreview"),
+      imagePreviewImg: document.getElementById("imagePreviewImg"),
       saveTemplateCheck: document.getElementById("saveTemplateCheck"),
       templateStrip: document.getElementById("templateStrip"),
       bulkBackdrop: document.getElementById("bulkBackdrop"),
@@ -1520,6 +1635,8 @@
       els.categoryFilter.addEventListener("change", renderVisibleWeeks);
       els.statusFilter.addEventListener("change", renderVisibleWeeks);
       els.taskForm.addEventListener("submit", saveModalTask);
+      els.taskForm.addEventListener("paste", handleTaskPaste);
+      document.getElementById("clearImageBtn").addEventListener("click", clearPendingImage);
       els.bulkForm.addEventListener("submit", createBulkTasks);
       els.settingsForm.addEventListener("submit", saveSettings);
       els.authForm.addEventListener("submit", signIn);
@@ -1643,7 +1760,7 @@
           <button class="add-day" type="button" title="添加任务" onclick="event.stopPropagation();openModal('${key}')">+</button>
         </div>
         ${renderDateMeta(date, marks)}
-        <div class="task-list">
+        <div class="task-list" data-date="${key}">
           ${dayTasks.length ? dayTasks.map(renderTask).join("") : '<div class="empty-hint">双击或点 + 添加</div>'}
         </div>
       </article>`;
@@ -1653,8 +1770,10 @@
       const cat = getCategory(task.category);
       const showCategory = settings.taskDisplay === "category" || settings.taskDisplay === "note";
       const showNote = settings.taskDisplay === "note" && task.note;
-      return `<div class="task ${task.done ? "done" : ""}" draggable="${settings.dragEnabled ? "true" : "false"}" data-task-id="${task.id}" data-task-date="${task.date}" style="--cat-color:${cat.color};--cat-bg:${cat.bg}" ondblclick="event.stopPropagation();openModal('${task.date}','${task.id}')">
+      const hasImage = Boolean(task.image?.src);
+      return `<div class="task ${task.done ? "done" : ""} ${hasImage ? "has-image" : ""}" draggable="${settings.dragEnabled ? "true" : "false"}" data-task-id="${task.id}" data-task-date="${task.date}" style="--cat-color:${cat.color};--cat-bg:${cat.bg}" ondblclick="event.stopPropagation();openModal('${task.date}','${task.id}')">
         <div class="task-main">
+          ${hasImage ? `<img class="task-image" src="${escapeAttr(task.image.src)}" alt="${escapeAttr(task.title || "图片事项")}" loading="lazy" />` : ""}
           <p class="task-title">${escapeHtml(task.title)}</p>
           ${showCategory ? `<span class="tag">${escapeHtml(cat.name)}</span>` : ""}
           ${showNote ? `<span class="note">${escapeHtml(task.note)}</span>` : ""}
@@ -1676,7 +1795,7 @@
         .filter(task => category === "all" || task.category === category)
         .filter(task => status === "all" || (status === "done" ? task.done : !task.done))
         .filter(task => !query || task.title.toLowerCase().includes(query) || (task.note || "").toLowerCase().includes(query))
-        .sort((a, b) => Number(a.done) - Number(b.done) || a.createdAt - b.createdAt);
+        .sort(taskOrder);
     }
 
     function handleDragStart(event) {
@@ -1694,8 +1813,10 @@
 
     function handleDragEnd() {
       draggingTaskId = null;
+      dropBeforeTaskId = null;
       document.querySelectorAll(".task.dragging").forEach(el => el.classList.remove("dragging"));
       document.querySelectorAll(".day.drag-over").forEach(el => el.classList.remove("drag-over"));
+      document.querySelectorAll(".drop-marker").forEach(el => el.remove());
     }
 
     function handleDragOver(event) {
@@ -1708,6 +1829,9 @@
         if (el !== day) el.classList.remove("drag-over");
       });
       day.classList.add("drag-over");
+      const position = getDropPosition(day, event.clientY);
+      dropBeforeTaskId = position.beforeId;
+      placeDropMarker(day, position.beforeId);
     }
 
     function handleDragLeave(event) {
@@ -1722,7 +1846,7 @@
       if (!day) return;
       event.preventDefault();
       const targetDate = day.dataset.date;
-      moveTaskToDate(draggingTaskId, targetDate);
+      moveTaskToDate(draggingTaskId, targetDate, dropBeforeTaskId);
       handleDragEnd();
     }
 
@@ -1752,6 +1876,11 @@
         if (el !== day) el.classList.remove("drag-over");
       });
       if (day) day.classList.add("drag-over");
+      if (day) {
+        const position = getDropPosition(day, event.clientY);
+        dropBeforeTaskId = position.beforeId;
+        placeDropMarker(day, position.beforeId);
+      }
     }
 
     function handleMouseDragEnd(event) {
@@ -1761,19 +1890,61 @@
       drag.el.classList.remove("dragging");
       document.body.classList.remove("dragging-task");
       document.querySelectorAll(".day.drag-over").forEach(el => el.classList.remove("drag-over"));
+      document.querySelectorAll(".drop-marker").forEach(el => el.remove());
       if (!drag.active) return;
       const day = document.elementFromPoint(event.clientX, event.clientY)?.closest(".day");
-      if (day) moveTaskToDate(drag.id, day.dataset.date);
+      if (day) {
+        const position = getDropPosition(day, event.clientY);
+        moveTaskToDate(drag.id, day.dataset.date, position.beforeId);
+      }
     }
 
-    function moveTaskToDate(taskId, targetDate) {
+    function getDropPosition(day, clientY) {
+      const taskEls = [...day.querySelectorAll(".task:not(.dragging)")];
+      for (const el of taskEls) {
+        const rect = el.getBoundingClientRect();
+        if (clientY < rect.top + rect.height / 2) {
+          return { beforeId: el.dataset.taskId };
+        }
+      }
+      return { beforeId: null };
+    }
+
+    function placeDropMarker(day, beforeId) {
+      document.querySelectorAll(".drop-marker").forEach(el => el.remove());
+      const list = day.querySelector(".task-list");
+      if (!list) return;
+      const marker = document.createElement("div");
+      marker.className = "drop-marker";
+      const beforeEl = beforeId ? list.querySelector(`.task[data-task-id="${beforeId}"]`) : null;
+      list.insertBefore(marker, beforeEl || null);
+    }
+
+    function moveTaskToDate(taskId, targetDate, beforeId = null) {
       const task = tasks.find(item => item.id === taskId);
-      if (!task || !targetDate || task.date === targetDate) return false;
+      if (!task || !targetDate) return false;
+      const oldDate = task.date;
       task.date = targetDate;
+      reorderDateTasks(targetDate, taskId, beforeId);
+      if (oldDate !== targetDate) reorderDateTasks(oldDate);
       persist();
       renderVisibleWeeks();
-      showToast(`已移动到 ${targetDate.slice(5)}`);
+      showToast(oldDate === targetDate ? "已调整顺序" : `已移动到 ${targetDate.slice(5)}`);
       return true;
+    }
+
+    function reorderDateTasks(dateKey, movedId = null, beforeId = null) {
+      const ordered = tasks
+        .filter(item => item.date === dateKey && item.id !== movedId)
+        .sort(taskOrder);
+      const moved = movedId ? tasks.find(item => item.id === movedId) : null;
+      if (moved && moved.date === dateKey) {
+        const targetIndex = beforeId ? ordered.findIndex(item => item.id === beforeId) : -1;
+        ordered.splice(targetIndex >= 0 ? targetIndex : ordered.length, 0, moved);
+      }
+      ordered.forEach((item, index) => {
+        item.sortIndex = index;
+      });
     }
 
     function setupInfiniteScroll() {
@@ -1906,16 +2077,23 @@
       els.taskDate.value = task ? task.date : dateKey || toKey(new Date());
       els.taskCategory.value = task ? task.category : settings.defaultCategory;
       els.taskNote.value = task ? task.note || "" : "";
+      pendingImage = task?.image || null;
+      updateImagePreview();
       els.saveTemplateCheck.checked = false;
       renderTemplateStrip(els.taskDate.value);
       showBackdrop(els.modalBackdrop);
-      setTimeout(() => els.taskTitle.focus(), 0);
+      setTimeout(() => {
+        els.taskTitle.focus();
+        if (!task) inspectClipboard();
+      }, 0);
     }
 
     function closeModal() {
       hideBackdrop(els.modalBackdrop);
       editingId = null;
+      pendingImage = null;
       els.taskForm.reset();
+      updateImagePreview();
     }
 
     function openSettings() {
@@ -2005,7 +2183,7 @@
       queueCloudSave();
       renderSelects();
       renderVisibleWeeks();
-      els.settingsBackdrop.classList.remove("show");
+      hideBackdrop(els.settingsBackdrop);
       showToast("设置已保存");
     }
 
@@ -2015,14 +2193,17 @@
         title: els.taskTitle.value.trim(),
         date: els.taskDate.value,
         category: els.taskCategory.value,
-        note: els.taskNote.value.trim()
+        note: els.taskNote.value.trim(),
+        image: pendingImage
       };
-      if (!payload.title) return showToast("请输入任务内容");
+      if (!payload.title && payload.image) payload.title = "图片事项";
+      if (!payload.title) return showToast("请输入任务内容或粘贴图片");
       if (editingId) {
         tasks = tasks.map(task => task.id === editingId ? { ...task, ...payload } : task);
         showToast("已保存");
       } else {
-        tasks.unshift({ ...payload, id: createId(), done: false, createdAt: Date.now() });
+        const newTask = { ...payload, id: createId(), done: false, createdAt: Date.now(), sortIndex: nextSortIndex(payload.date) };
+        tasks.push(newTask);
         if (els.saveTemplateCheck.checked) saveTemplate(payload);
         showToast("已添加");
       }
@@ -2049,9 +2230,105 @@
       if (!task) return;
       if (!confirm(`删除「${task.title}」？`)) return;
       tasks = tasks.filter(item => item.id !== id);
+      reorderDateTasks(task.date);
       persist();
       renderVisibleWeeks();
       showToast("已删除");
+    }
+
+    async function inspectClipboard() {
+      if (!navigator.clipboard) {
+        els.pasteHint.textContent = "当前浏览器不允许自动读取剪贴板，可在这里按 Ctrl+V 粘贴。";
+        return;
+      }
+      try {
+        if (navigator.clipboard.read) {
+          const items = await navigator.clipboard.read();
+          for (const item of items) {
+            const imageType = item.types.find(type => type.startsWith("image/"));
+            if (imageType) {
+              const blob = await item.getType(imageType);
+              await setPendingImage(blob);
+              showToast("已识别剪贴板图片");
+              return;
+            }
+          }
+        }
+        if (navigator.clipboard.readText) {
+          const text = (await navigator.clipboard.readText()).trim();
+          if (text && !els.taskTitle.value.trim()) {
+            els.taskTitle.value = text.slice(0, 500);
+            showToast("已填入剪贴板文字");
+          }
+        }
+      } catch {
+        els.pasteHint.textContent = "未获得剪贴板权限，可在这里按 Ctrl+V 粘贴图片或文字。";
+      }
+    }
+
+    async function handleTaskPaste(event) {
+      const items = [...(event.clipboardData?.items || [])];
+      const imageItem = items.find(item => item.type.startsWith("image/"));
+      if (imageItem) {
+        event.preventDefault();
+        await setPendingImage(imageItem.getAsFile());
+        showToast("已粘贴图片");
+        return;
+      }
+      const text = event.clipboardData?.getData("text/plain")?.trim();
+      if (text && event.target === els.pasteZone) {
+        event.preventDefault();
+        els.taskTitle.value = text.slice(0, 500);
+        showToast("已填入文字");
+      }
+    }
+
+    async function setPendingImage(file) {
+      if (!file) return;
+      pendingImage = await compressImage(file);
+      updateImagePreview();
+    }
+
+    function clearPendingImage() {
+      pendingImage = null;
+      updateImagePreview();
+      showToast("已移除图片");
+    }
+
+    function updateImagePreview() {
+      const hasImage = Boolean(pendingImage?.src);
+      els.imagePreview.classList.toggle("show", hasImage);
+      els.pasteZone.classList.toggle("is-ready", hasImage);
+      els.imagePreviewImg.src = hasImage ? pendingImage.src : "";
+      els.pasteHint.textContent = hasImage
+        ? "图片会作为事项主体展示；也可以继续填写标题和备注。"
+        : "打开后会尝试读取剪贴板；也可以在这里按 Ctrl+V 粘贴图片或文字。";
+    }
+
+    function compressImage(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const reader = new FileReader();
+        reader.onload = () => {
+          img.onload = () => {
+            const maxSide = 900;
+            const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+            const width = Math.max(1, Math.round(img.width * scale));
+            const height = Math.max(1, Math.round(img.height * scale));
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, width, height);
+            const src = canvas.toDataURL("image/webp", 0.78);
+            resolve({ src, width, height, type: "image/webp", createdAt: Date.now() });
+          };
+          img.onerror = reject;
+          img.src = reader.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
     }
 
     function clearDoneTasks() {
@@ -2097,7 +2374,8 @@
     function addTemplateToDate(id, dateKey) {
       const t = taskTemplates.find(item => item.id === id);
       if (!t) return;
-      tasks.unshift({ id: createId(), title: t.title, date: dateKey || els.taskDate.value || toKey(new Date()), category: t.category, note: t.note || "", done: false, createdAt: Date.now() });
+      const targetDate = dateKey || els.taskDate.value || toKey(new Date());
+      tasks.push({ id: createId(), title: t.title, date: targetDate, category: t.category, note: t.note || "", done: false, createdAt: Date.now(), sortIndex: nextSortIndex(targetDate) });
       persist();
       renderVisibleWeeks();
       showToast("已添加模板任务");
@@ -2126,10 +2404,12 @@
     }
 
     function openBulk(dateKey) {
+      const currentTitle = els.taskTitle.value.trim();
+      const currentCategory = els.taskCategory.value || settings.defaultCategory;
       closeModal();
       const d = dateKey || toKey(new Date());
-      els.bulkTitle.value = els.taskTitle.value.trim();
-      els.bulkCategory.value = els.taskCategory.value || settings.defaultCategory;
+      els.bulkTitle.value = currentTitle;
+      els.bulkCategory.value = currentCategory;
       els.bulkStart.value = d;
       els.bulkEnd.value = d;
       els.bulkMonthDay.value = "";
@@ -2162,8 +2442,12 @@
         return;
       }
       const existing = new Set(tasks.map(t => `${t.date}|${t.title}`));
-      const rows = items.filter(item => !existing.has(`${item.date}|${item.title}`)).map(item => ({ id: createId(), title: item.title, date: item.date, category: item.category, note: item.note || "", done: false, createdAt: Date.now() }));
-      tasks = [...rows, ...tasks];
+      const sortCounters = {};
+      const rows = items.filter(item => !existing.has(`${item.date}|${item.title}`)).map(item => {
+        sortCounters[item.date] = sortCounters[item.date] ?? nextSortIndex(item.date);
+        return { id: createId(), title: item.title, date: item.date, category: item.category, note: item.note || "", done: false, createdAt: Date.now(), sortIndex: sortCounters[item.date]++ };
+      });
+      tasks = [...tasks, ...rows];
       persist();
       closeBulk();
       renderVisibleWeeks();
@@ -2293,6 +2577,7 @@
       supabaseClient = null;
       currentUser = null;
       cloudReady = false;
+      setCloudStatus("idle");
       initCloud();
       showToast("云端配置已保存");
     }
@@ -2304,6 +2589,7 @@
       const password = els.authPassword.value;
       if (!email || !password) return showToast("请填写邮箱和密码");
       try {
+        setCloudStatus("syncing");
         const session = await cloudRequest("/auth/v1/token?grant_type=password", {
           method: "POST",
           body: JSON.stringify({ email, password })
@@ -2311,6 +2597,7 @@
         setCloudSession(session);
         await loadCloudData();
       } catch (error) {
+        setCloudStatus("error");
         return showToast(error.message || "登录失败");
       }
       closeAuth();
@@ -2323,6 +2610,7 @@
       const password = els.authPassword.value;
       if (!email || password.length < 6) return showToast("请填写邮箱和至少 6 位密码");
       try {
+        setCloudStatus("syncing");
         const session = await cloudRequest("/auth/v1/signup", {
           method: "POST",
           body: JSON.stringify({ email, password })
@@ -2336,6 +2624,7 @@
           showToast("注册成功，请按邮箱验证要求完成登录");
         }
       } catch (error) {
+        setCloudStatus("error");
         showToast(error.message || "注册失败");
       }
     }
@@ -2345,6 +2634,7 @@
       localStorage.removeItem(SUPABASE_SESSION_KEY);
       if (supabaseClient) supabaseClient.session = null;
       currentUser = null;
+      setCloudStatus("idle");
       updateCloudUi();
       closeAuth();
       showToast("已退出登录，继续使用本地数据");
@@ -2355,8 +2645,8 @@
         showToast("请先登录账号");
         return;
       }
-      await saveCloudData();
-      showToast("已同步到云端");
+      const ok = await saveCloudData();
+      if (ok) showToast("已同步到云端");
     }
 
     function ensureCloudClient() {
@@ -2378,6 +2668,7 @@
     async function loadCloudData() {
       if (!supabaseClient || !currentUser) return;
       cloudLoading = true;
+      setCloudStatus("syncing");
       try {
         const rows = await cloudRequest(`/rest/v1/todo_data?user_id=eq.${encodeURIComponent(currentUser.id)}&select=tasks,settings,templates`, {
           method: "GET"
@@ -2396,7 +2687,9 @@
           await saveCloudData();
           showToast("已把本地数据迁移到云端");
         }
+        setCloudStatus("synced");
       } catch (error) {
+        setCloudStatus("error");
         showToast("云端数据读取失败");
         console.error(error);
       } finally {
@@ -2413,6 +2706,7 @@
 
     async function saveCloudData() {
       if (!supabaseClient || !currentUser) return;
+      setCloudStatus("syncing");
       const payload = {
         user_id: currentUser.id,
         tasks,
@@ -2427,11 +2721,15 @@
           body: JSON.stringify(payload)
         }, true);
       } catch (error) {
+        setCloudStatus("error");
         showToast("云同步失败");
         console.error(error);
-        return;
+        return false;
       }
+      lastCloudSyncAt = Date.now();
+      setCloudStatus("synced");
       updateCloudUi();
+      return true;
     }
 
     function getCloudConfig() {
@@ -2502,19 +2800,31 @@
     function updateCloudUi() {
       const { url, anonKey } = getCloudConfig();
       const configured = Boolean(url && anonKey);
-      const text = currentUser ? `云同步：${currentUser.email || "已登录"}` : (configured ? "云同步：未登录" : "本地模式");
+      const statusText = cloudStatus === "syncing" ? "同步中"
+        : cloudStatus === "synced" ? "已同步"
+        : cloudStatus === "error" ? "同步失败"
+        : "云同步";
+      const text = currentUser ? `${statusText}：${currentUser.email || "已登录"}` : (configured ? "云同步：未登录" : "本地模式");
       els.accountStatus.textContent = text;
+      els.accountStatus.classList.toggle("syncing", cloudStatus === "syncing");
+      els.accountStatus.classList.toggle("synced", currentUser && cloudStatus === "synced");
+      els.accountStatus.classList.toggle("error", cloudStatus === "error");
       document.getElementById("authBtn").textContent = currentUser ? "账号" : "登录";
       if (els.authStatusText) {
         els.authStatusText.textContent = currentUser
-          ? `当前账号：${currentUser.email || currentUser.id}`
+          ? `当前账号：${currentUser.email || currentUser.id}。${lastCloudSyncAt ? `最近同步：${new Date(lastCloudSyncAt).toLocaleTimeString()}` : "保存后会自动同步。"}`
           : (configured ? "登录后会把任务、模板和设置同步到云端。" : "请先在设置的数据页填写 Supabase URL 和 anon key。");
       }
       if (els.cloudHelp) {
         els.cloudHelp.textContent = currentUser
-          ? `已登录 ${currentUser.email || ""}，保存操作会自动同步。`
+          ? `已登录 ${currentUser.email || ""}，当前状态：${statusText}${lastCloudSyncAt ? `，最近同步 ${new Date(lastCloudSyncAt).toLocaleTimeString()}` : ""}。`
           : (configured ? "云端配置已保存，登录账号后开始同步。" : "未配置 Supabase 时，数据只保存在当前浏览器本地。");
       }
+    }
+
+    function setCloudStatus(status) {
+      cloudStatus = status;
+      updateCloudUi();
     }
 
     function loadTasks() {
@@ -2745,17 +3055,41 @@
     function normalizeTasks(rows) {
       if (!Array.isArray(rows)) return [];
       return rows
-        .filter(row => row && row.title)
+        .filter(row => row && (row.title || row.image?.src))
         .map(row => ({
           id: row.id || createId(),
-          title: String(row.title || row.text || "").trim(),
+          title: String(row.title || row.text || (row.image?.src ? "图片事项" : "")).trim(),
           date: isDateKey(row.date) ? row.date : toKey(new Date()),
           category: CATEGORIES.some(cat => cat.id === row.category) ? row.category : (CATEGORIES.some(cat => cat.id === row.cat) ? row.cat : "work"),
           note: String(row.note || ""),
           done: Boolean(row.done),
+          image: normalizeImage(row.image),
+          sortIndex: Number.isFinite(Number(row.sortIndex)) ? Number(row.sortIndex) : Number(row.createdAt) || Date.now(),
           createdAt: Number(row.createdAt) || Date.now()
         }))
         .filter(row => row.title);
+    }
+
+    function normalizeImage(image) {
+      if (!image || typeof image !== "object" || typeof image.src !== "string" || !image.src.startsWith("data:image/")) return null;
+      return {
+        src: image.src,
+        width: Number(image.width) || 0,
+        height: Number(image.height) || 0,
+        type: image.type || "image/webp",
+        createdAt: Number(image.createdAt) || Date.now()
+      };
+    }
+
+    function taskOrder(a, b) {
+      return Number(a.done) - Number(b.done)
+        || (Number(a.sortIndex) || Number(a.createdAt) || 0) - (Number(b.sortIndex) || Number(b.createdAt) || 0)
+        || (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0);
+    }
+
+    function nextSortIndex(dateKey) {
+      const sameDay = tasks.filter(task => task.date === dateKey);
+      return sameDay.length ? Math.max(...sameDay.map(task => Number(task.sortIndex) || Number(task.createdAt) || 0)) + 1 : 0;
     }
 
     function persist() {
@@ -2830,6 +3164,10 @@
         '"': "&quot;",
         "'": "&#039;"
       }[char]));
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, "&#096;");
     }
 
     function showToast(message) {
