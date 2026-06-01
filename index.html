@@ -545,12 +545,19 @@
       background: rgba(255, 255, 255, .72);
       border: 1px solid rgba(148, 163, 184, .22);
       pointer-events: none;
+      user-select: none;
+      -webkit-user-drag: none;
     }
 
     .task-content {
       display: grid;
       gap: 6px;
       min-width: 0;
+    }
+
+    .task.has-image .task-content {
+      pointer-events: none;
+      user-select: none;
     }
 
     .task-content-text {
@@ -1618,6 +1625,8 @@
     let loadingMore = false;
     let draggingTaskId = null;
     let dropBeforeTaskId = null;
+    let pointerDrag = null;
+    let suppressNextClick = false;
     let mouseDrag = null;
     let pendingBlocks = [];
     let selectedDateKey = null;
@@ -1779,6 +1788,10 @@
       document.addEventListener("dragover", handleDragOver);
       document.addEventListener("dragleave", handleDragLeave);
       document.addEventListener("drop", handleDrop);
+      document.addEventListener("pointerdown", handlePointerDragStart);
+      document.addEventListener("pointermove", handlePointerDragMove);
+      document.addEventListener("pointerup", handlePointerDragEnd);
+      document.addEventListener("pointercancel", handlePointerDragEnd);
       document.addEventListener("click", handleDocumentClick);
       document.addEventListener("copy", handleDocumentCopy);
       window.addEventListener("scroll", throttle(updateMonthFromScroll, 80));
@@ -1878,7 +1891,7 @@
       const blocks = getTaskBlocks(task);
       const visibleBlocks = blocks.filter(block => block.type === "image").slice(0, 3);
       const hasImage = blocks.some(block => block.type === "image");
-      return `<div class="task ${task.done ? "done" : ""} ${hasImage ? "has-image" : ""}" draggable="${settings.dragEnabled ? "true" : "false"}" data-task-id="${task.id}" data-task-date="${task.date}" style="--cat-color:${cat.color};--cat-bg:${cat.bg}" ondblclick="event.stopPropagation();openModal('${task.date}','${task.id}')">
+      return `<div class="task ${task.done ? "done" : ""} ${hasImage ? "has-image" : ""}" draggable="false" data-task-id="${task.id}" data-task-date="${task.date}" style="--cat-color:${cat.color};--cat-bg:${cat.bg}" ondblclick="event.stopPropagation();openModal('${task.date}','${task.id}')">
         <div class="task-main">
           ${visibleBlocks.length ? `<div class="task-content">${visibleBlocks.map(renderTaskBlock).join("")}</div>` : ""}
           <p class="task-title">${escapeHtml(task.title)}</p>
@@ -1894,7 +1907,7 @@
     }
 
     function renderTaskBlock(block) {
-      if (block.type === "image") return `<img class="task-image" src="${escapeAttr(block.src)}" alt="图片内容" loading="lazy" />`;
+      if (block.type === "image") return `<img class="task-image" src="${escapeAttr(block.src)}" alt="图片内容" loading="lazy" draggable="false" />`;
       if (block.type === "text") return `<p class="task-content-text">${escapeHtml(block.text)}</p>`;
       return "";
     }
@@ -1965,6 +1978,72 @@
       const targetDate = day.dataset.date;
       moveTaskToDate(draggingTaskId, targetDate, dropBeforeTaskId);
       handleDragEnd();
+    }
+
+    function handlePointerDragStart(event) {
+      if (!settings.dragEnabled || event.button !== 0 || event.target.closest("button, input, select, textarea, [contenteditable='true']")) return;
+      const taskEl = event.target.closest(".task");
+      if (!taskEl) return;
+      pointerDrag = {
+        id: taskEl.dataset.taskId,
+        startX: event.clientX,
+        startY: event.clientY,
+        active: false,
+        el: taskEl,
+        pointerId: event.pointerId
+      };
+    }
+
+    function handlePointerDragMove(event) {
+      if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
+      const distance = Math.hypot(event.clientX - pointerDrag.startX, event.clientY - pointerDrag.startY);
+      if (!pointerDrag.active && distance < 8) return;
+      event.preventDefault();
+      if (!pointerDrag.active) {
+        pointerDrag.active = true;
+        draggingTaskId = pointerDrag.id;
+        pointerDrag.el.classList.add("dragging");
+        document.body.classList.add("dragging-task");
+        pointerDrag.el.setPointerCapture?.(event.pointerId);
+      }
+      updatePointerDropTarget(event.clientX, event.clientY);
+    }
+
+    function handlePointerDragEnd(event) {
+      if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
+      const drag = pointerDrag;
+      pointerDrag = null;
+      drag.el.releasePointerCapture?.(event.pointerId);
+      if (drag.active) {
+        suppressNextClick = true;
+        const day = document.elementFromPoint(event.clientX, event.clientY)?.closest(".day");
+        if (day) {
+          const position = getDropPosition(day, event.clientY);
+          moveTaskToDate(drag.id, day.dataset.date, position.beforeId);
+        }
+      }
+      drag.el.classList.remove("dragging");
+      document.body.classList.remove("dragging-task");
+      document.querySelectorAll(".day.drag-over").forEach(el => el.classList.remove("drag-over"));
+      document.querySelectorAll(".drop-marker").forEach(el => el.remove());
+      draggingTaskId = null;
+      dropBeforeTaskId = null;
+    }
+
+    function updatePointerDropTarget(clientX, clientY) {
+      const day = document.elementFromPoint(clientX, clientY)?.closest(".day");
+      document.querySelectorAll(".day.drag-over").forEach(el => {
+        if (el !== day) el.classList.remove("drag-over");
+      });
+      if (!day) {
+        document.querySelectorAll(".drop-marker").forEach(el => el.remove());
+        dropBeforeTaskId = null;
+        return;
+      }
+      day.classList.add("drag-over");
+      const position = getDropPosition(day, clientY);
+      dropBeforeTaskId = position.beforeId;
+      placeDropMarker(day, position.beforeId);
     }
 
     function handleMouseDragStart(event) {
@@ -2065,6 +2144,11 @@
     }
 
     function handleDocumentClick(event) {
+      if (suppressNextClick) {
+        suppressNextClick = false;
+        event.preventDefault();
+        return;
+      }
       if (event.target.closest(".modal, button, input, select, textarea, .task")) return;
       const day = event.target.closest(".day");
       if (!day) return;
