@@ -2429,12 +2429,15 @@
       for (const item of items) {
         if (item.type.startsWith("image/")) {
           event.preventDefault();
-          const image = await compressImage(item.getAsFile());
-          pendingBlocks.push({ type: "image", ...image });
-          added++;
+          const file = item.getAsFile();
+          if (file) {
+            const image = await compressImage(file);
+            pendingBlocks.push({ type: "image", ...image });
+            added++;
+          }
         }
       }
-      const text = event.clipboardData?.getData("text/plain")?.trim();
+      const text = cleanPastedText(event.clipboardData?.getData("text/plain"));
       if (text) {
         event.preventDefault();
         pendingBlocks.push({ type: "text", text });
@@ -2448,6 +2451,7 @@
     }
 
     function renderContentBlocks() {
+      pendingBlocks = normalizeContentBlocks(pendingBlocks);
       els.pasteZone.classList.toggle("is-ready", pendingBlocks.length > 0);
       els.pasteHint.textContent = pendingBlocks.length
         ? "已粘贴内容，可继续粘贴或移除单项。"
@@ -2455,7 +2459,7 @@
       els.contentBlocks.innerHTML = pendingBlocks.map((block, index) => {
         const body = block.type === "image"
           ? `<img src="${escapeAttr(block.src)}" alt="粘贴图片 ${index + 1}" />`
-          : `<p>${escapeHtml(block.text)}</p>`;
+          : `<p>${escapeHtml(block.text || "")}</p>`;
         return `<div class="content-block">
           ${body}
           <div class="content-block-actions"><button class="mini-btn bad" type="button" onclick="removeContentBlock(${index})">×</button></div>
@@ -2467,6 +2471,12 @@
       pendingBlocks.splice(index, 1);
       renderContentBlocks();
       showToast("已移除内容");
+    }
+
+    function cleanPastedText(value) {
+      const text = String(value || "").trim();
+      if (!text || text === "undefined" || text === "null") return "";
+      return text;
     }
 
     function compressImage(file) {
@@ -3325,8 +3335,9 @@
             createdAt: Number(block.createdAt) || Date.now()
           };
         }
-        if (block?.type === "text" && String(block.text || "").trim()) {
-          return { type: "text", text: String(block.text).trim(), createdAt: Number(block.createdAt) || Date.now() };
+        const text = cleanPastedText(block?.text);
+        if (block?.type === "text" && text) {
+          return { type: "text", text, createdAt: Number(block.createdAt) || Date.now() };
         }
         return null;
       }).filter(Boolean).slice(0, 20);
