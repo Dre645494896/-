@@ -317,6 +317,11 @@
       box-shadow: inset 0 0 0 2px var(--primary);
     }
 
+    .day.selected-day {
+      background: #f7fbff;
+      box-shadow: inset 0 0 0 2px rgba(37, 99, 235, .34);
+    }
+
     .day-head {
       display: flex;
       align-items: center;
@@ -539,6 +544,22 @@
       border-radius: 6px;
       background: rgba(255, 255, 255, .72);
       border: 1px solid rgba(148, 163, 184, .22);
+      pointer-events: none;
+    }
+
+    .task-content {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .task-content-text {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
 
     .task.has-image .task-main {
@@ -704,6 +725,11 @@
       padding-top: 10px;
     }
 
+    #taskTitle {
+      min-height: 46px;
+      resize: none;
+    }
+
     .modal-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -728,6 +754,25 @@
       background: var(--panel-soft);
       color: var(--muted);
       font-size: 13px;
+    }
+
+    .auth-switch {
+      margin-top: 4px;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .auth-mode-link {
+      min-height: 28px;
+      border: 0;
+      background: transparent;
+      color: var(--primary);
+      padding: 0;
+      font-weight: 750;
     }
 
     .settings-grid {
@@ -906,13 +951,14 @@
     .paste-zone {
       display: grid;
       gap: 8px;
-      min-height: 78px;
+      min-height: 168px;
       padding: 10px;
       border: 1px dashed var(--line-strong);
       border-radius: var(--radius);
       background: #fbfcfd;
       color: var(--muted);
       font-size: 12px;
+      align-content: start;
       transition: border-color .16s ease, background .16s ease, color .16s ease;
     }
 
@@ -927,22 +973,49 @@
       justify-self: start;
     }
 
-    .image-preview {
-      display: none;
+    .paste-zone-hint {
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .content-blocks {
+      display: grid;
       gap: 8px;
     }
 
-    .image-preview.show {
-      display: grid;
+    .content-blocks:empty {
+      display: none;
     }
 
-    .image-preview img {
+    .content-block {
+      display: grid;
+      gap: 6px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+    }
+
+    .content-block p {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text);
+      line-height: 1.55;
+    }
+
+    .content-block img {
       width: min(100%, 360px);
       max-height: 220px;
       object-fit: contain;
       border: 1px solid var(--line);
       border-radius: var(--radius);
       background: #fff;
+    }
+
+    .content-block-actions {
+      display: flex;
+      justify-content: flex-end;
     }
 
     .template-save {
@@ -952,6 +1025,14 @@
       color: var(--muted);
       font-size: 12px;
       font-weight: 700;
+      justify-self: start;
+      min-height: 26px;
+      padding: 2px 4px;
+    }
+
+    .template-save input {
+      width: 16px;
+      height: 16px;
     }
 
     .template-chip {
@@ -1142,18 +1223,15 @@
     <form class="modal" id="taskForm">
       <h2 id="modalTitle">新任务</h2>
       <div class="modal-grid">
-        <textarea id="taskTitle" placeholder="任务内容，可直接粘贴文字或图片" maxlength="500"></textarea>
+        <textarea id="taskTitle" placeholder="任务标题" maxlength="500"></textarea>
         <div class="modal-row">
           <input id="taskDate" type="date" required />
           <select id="taskCategory"></select>
         </div>
         <input id="taskNote" type="text" placeholder="备注，可选" maxlength="120" />
         <div class="paste-zone" id="pasteZone" tabindex="0">
-          <span id="pasteHint">打开后会尝试读取剪贴板；也可以在这里按 Ctrl+V 粘贴图片或文字。</span>
-          <div class="image-preview" id="imagePreview">
-            <img id="imagePreviewImg" alt="已粘贴的图片预览" />
-            <button class="btn" type="button" id="clearImageBtn">移除图片</button>
-          </div>
+          <span class="paste-zone-hint" id="pasteHint">在这里按 Ctrl+V 粘贴文字或图片，内容会按粘贴顺序保存。</span>
+          <div class="content-blocks" id="contentBlocks"></div>
         </div>
         <label class="template-save">
           <input id="saveTemplateCheck" type="checkbox" />
@@ -1334,17 +1412,20 @@
 
   <div class="modal-backdrop" id="authBackdrop">
     <form class="modal" id="authForm">
-      <h2>账号登录</h2>
+      <h2 id="authTitle">登录账号</h2>
       <div class="modal-grid">
         <div class="auth-status" id="authStatusText">登录后会把任务、模板和设置同步到云端。</div>
         <input id="authEmail" type="email" placeholder="邮箱" autocomplete="email" />
         <input id="authPassword" type="password" placeholder="密码，至少 6 位" autocomplete="current-password" />
+        <div class="auth-switch">
+          <span id="authSwitchText">没有账号？</span>
+          <button class="auth-mode-link" type="button" id="authModeBtn">注册</button>
+        </div>
       </div>
       <div class="modal-actions">
         <button class="btn" type="button" id="logoutBtn">退出登录</button>
         <button class="btn" type="button" id="authCancelBtn">取消</button>
-        <button class="btn" type="button" id="signupBtn">注册</button>
-        <button class="btn primary" type="submit">登录</button>
+        <button class="btn primary" type="submit" id="authSubmitBtn">登录</button>
       </div>
     </form>
   </div>
@@ -1521,7 +1602,9 @@
     let draggingTaskId = null;
     let dropBeforeTaskId = null;
     let mouseDrag = null;
-    let pendingImage = null;
+    let pendingBlocks = [];
+    let selectedDateKey = null;
+    let authMode = "login";
     let settings = loadSettings();
     let taskTemplates = loadTemplates();
     let lastBulkItems = [];
@@ -1552,8 +1635,7 @@
       taskNote: document.getElementById("taskNote"),
       pasteZone: document.getElementById("pasteZone"),
       pasteHint: document.getElementById("pasteHint"),
-      imagePreview: document.getElementById("imagePreview"),
-      imagePreviewImg: document.getElementById("imagePreviewImg"),
+      contentBlocks: document.getElementById("contentBlocks"),
       saveTemplateCheck: document.getElementById("saveTemplateCheck"),
       templateStrip: document.getElementById("templateStrip"),
       bulkBackdrop: document.getElementById("bulkBackdrop"),
@@ -1571,9 +1653,13 @@
       settingsForm: document.getElementById("settingsForm"),
       authBackdrop: document.getElementById("authBackdrop"),
       authForm: document.getElementById("authForm"),
+      authTitle: document.getElementById("authTitle"),
       authStatusText: document.getElementById("authStatusText"),
       authEmail: document.getElementById("authEmail"),
       authPassword: document.getElementById("authPassword"),
+      authSwitchText: document.getElementById("authSwitchText"),
+      authModeBtn: document.getElementById("authModeBtn"),
+      authSubmitBtn: document.getElementById("authSubmitBtn"),
       dayHeightRange: document.getElementById("dayHeightRange"),
       dayHeightInput: document.getElementById("dayHeightInput"),
       taskDensity: document.getElementById("taskDensity"),
@@ -1606,6 +1692,7 @@
       applySettings();
       renderSelects();
       bindEvents();
+      handleAuthRedirect();
       renderAround(new Date());
       setupInfiniteScroll();
       initCloud();
@@ -1636,11 +1723,12 @@
       els.statusFilter.addEventListener("change", renderVisibleWeeks);
       els.taskForm.addEventListener("submit", saveModalTask);
       els.taskForm.addEventListener("paste", handleTaskPaste);
-      document.getElementById("clearImageBtn").addEventListener("click", clearPendingImage);
+      els.taskDate.addEventListener("click", showTaskDatePicker);
+      els.taskDate.addEventListener("focus", showTaskDatePicker);
       els.bulkForm.addEventListener("submit", createBulkTasks);
       els.settingsForm.addEventListener("submit", saveSettings);
-      els.authForm.addEventListener("submit", signIn);
-      document.getElementById("signupBtn").addEventListener("click", signUp);
+      els.authForm.addEventListener("submit", handleAuthSubmit);
+      els.authModeBtn.addEventListener("click", () => setAuthMode(authMode === "login" ? "signup" : "login"));
       document.getElementById("logoutBtn").addEventListener("click", signOut);
       document.getElementById("authCancelBtn").addEventListener("click", closeAuth);
       document.getElementById("saveCloudConfigBtn").addEventListener("click", saveCloudConfig);
@@ -1674,9 +1762,8 @@
       document.addEventListener("dragover", handleDragOver);
       document.addEventListener("dragleave", handleDragLeave);
       document.addEventListener("drop", handleDrop);
-      document.addEventListener("mousedown", handleMouseDragStart);
-      document.addEventListener("mousemove", handleMouseDragMove);
-      document.addEventListener("mouseup", handleMouseDragEnd);
+      document.addEventListener("click", handleDocumentClick);
+      document.addEventListener("copy", handleDocumentCopy);
       window.addEventListener("scroll", throttle(updateMonthFromScroll, 80));
       window.addEventListener("resize", throttle(updateMonthFromScroll, 120));
     }
@@ -1748,7 +1835,8 @@
         settings.weekendStyle === "tint" ? "weekend-tint" : "",
         marks.some(mark => mark.kind === "holiday") ? "has-holiday" : "",
         special ? "has-special" : "",
-        today ? "is-today" : ""
+        today ? "is-today" : "",
+        selectedDateKey === key ? "selected-day" : ""
       ].filter(Boolean).join(" ");
       return `<article class="${classes}" data-date="${key}"${style} ondblclick="openModal('${key}')">
         <div class="day-head">
@@ -1770,10 +1858,12 @@
       const cat = getCategory(task.category);
       const showCategory = settings.taskDisplay === "category" || settings.taskDisplay === "note";
       const showNote = settings.taskDisplay === "note" && task.note;
-      const hasImage = Boolean(task.image?.src);
+      const blocks = getTaskBlocks(task);
+      const visibleBlocks = blocks.slice(0, 3);
+      const hasImage = blocks.some(block => block.type === "image");
       return `<div class="task ${task.done ? "done" : ""} ${hasImage ? "has-image" : ""}" draggable="${settings.dragEnabled ? "true" : "false"}" data-task-id="${task.id}" data-task-date="${task.date}" style="--cat-color:${cat.color};--cat-bg:${cat.bg}" ondblclick="event.stopPropagation();openModal('${task.date}','${task.id}')">
         <div class="task-main">
-          ${hasImage ? `<img class="task-image" src="${escapeAttr(task.image.src)}" alt="${escapeAttr(task.title || "图片事项")}" loading="lazy" />` : ""}
+          ${visibleBlocks.length ? `<div class="task-content">${visibleBlocks.map(renderTaskBlock).join("")}</div>` : ""}
           <p class="task-title">${escapeHtml(task.title)}</p>
           ${showCategory ? `<span class="tag">${escapeHtml(cat.name)}</span>` : ""}
           ${showNote ? `<span class="note">${escapeHtml(task.note)}</span>` : ""}
@@ -1786,6 +1876,12 @@
       </div>`;
     }
 
+    function renderTaskBlock(block) {
+      if (block.type === "image") return `<img class="task-image" src="${escapeAttr(block.src)}" alt="图片内容" loading="lazy" />`;
+      if (block.type === "text") return `<p class="task-content-text">${escapeHtml(block.text)}</p>`;
+      return "";
+    }
+
     function getVisibleTasksForDate(key) {
       const query = els.searchInput.value.trim().toLowerCase();
       const category = els.categoryFilter.value;
@@ -1794,7 +1890,7 @@
         .filter(task => task.date === key)
         .filter(task => category === "all" || task.category === category)
         .filter(task => status === "all" || (status === "done" ? task.done : !task.done))
-        .filter(task => !query || task.title.toLowerCase().includes(query) || (task.note || "").toLowerCase().includes(query))
+        .filter(task => !query || task.title.toLowerCase().includes(query) || (task.note || "").toLowerCase().includes(query) || getTaskBlocks(task).some(block => block.type === "text" && block.text.toLowerCase().includes(query)))
         .sort(taskOrder);
     }
 
@@ -1805,6 +1901,10 @@
       }
       const taskEl = event.target.closest(".task");
       if (!taskEl) return;
+      if (event.target.closest("button")) {
+        event.preventDefault();
+        return;
+      }
       draggingTaskId = taskEl.dataset.taskId;
       taskEl.classList.add("dragging");
       event.dataTransfer.effectAllowed = "move";
@@ -1947,6 +2047,70 @@
       });
     }
 
+    function handleDocumentClick(event) {
+      if (event.target.closest(".modal, button, input, select, textarea, .task")) return;
+      const day = event.target.closest(".day");
+      if (!day) return;
+      selectDate(day.dataset.date);
+      showToast(`已选中 ${selectedDateKey.slice(5)}，按 Ctrl+C 复制当天事项`);
+    }
+
+    function selectDate(dateKey) {
+      selectedDateKey = dateKey;
+      document.querySelectorAll(".day.selected-day").forEach(el => el.classList.remove("selected-day"));
+      document.querySelectorAll(`.day[data-date="${dateKey}"]`).forEach(el => el.classList.add("selected-day"));
+    }
+
+    function handleDocumentCopy(event) {
+      if (!selectedDateKey) return;
+      if (document.activeElement && ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
+      const rows = getTasksForDate(selectedDateKey);
+      if (!rows.length) {
+        showToast("当天没有可复制的事项");
+        return;
+      }
+      const text = buildDateCopyText(selectedDateKey, rows);
+      event.clipboardData.setData("text/plain", text);
+      event.clipboardData.setData("text/html", buildDateCopyHtml(selectedDateKey, rows));
+      event.preventDefault();
+      showToast(`已复制 ${rows.length} 条事项`);
+    }
+
+    function buildDateCopyText(dateKey, rows) {
+      const lines = [`${dateKey.replace(/-/g, "/")} 事项`, ""];
+      rows.forEach((task, index) => {
+        const cat = getCategory(task.category);
+        lines.push(`${index + 1}. ${cat.name}｜${task.title}${task.done ? "（已完成）" : ""}`);
+        if (task.note) lines.push(`备注：${task.note}`);
+        getTaskBlocks(task).forEach(block => {
+          if (block.type === "text") lines.push(block.text);
+          if (block.type === "image") lines.push("[图片]");
+        });
+        lines.push("");
+      });
+      return lines.join("\n").trim();
+    }
+
+    function getTasksForDate(dateKey) {
+      return tasks.filter(task => task.date === dateKey).sort(taskOrder);
+    }
+
+    function buildDateCopyHtml(dateKey, rows) {
+      const parts = [`<h3>${escapeHtml(dateKey.replace(/-/g, "/"))} 事项</h3>`, "<ol>"];
+      rows.forEach(task => {
+        const cat = getCategory(task.category);
+        parts.push(`<li><strong>${escapeHtml(cat.name)}｜${escapeHtml(task.title)}</strong>${task.done ? "（已完成）" : ""}`);
+        if (task.note) parts.push(`<div>备注：${escapeHtml(task.note)}</div>`);
+        getTaskBlocks(task).forEach(block => {
+          if (block.type === "text") parts.push(`<p>${escapeHtml(block.text).replace(/\n/g, "<br>")}</p>`);
+          if (block.type === "image") parts.push(`<div><img src="${escapeAttr(block.src)}" style="max-width:420px;height:auto;" /></div>`);
+        });
+        parts.push("</li>");
+      });
+      parts.push("</ol>");
+      return parts.join("");
+    }
+
     function setupInfiniteScroll() {
       const bottomObserver = new IntersectionObserver(entries => {
         if (entries.some(entry => entry.isIntersecting)) appendWeeks(8);
@@ -2077,23 +2241,26 @@
       els.taskDate.value = task ? task.date : dateKey || toKey(new Date());
       els.taskCategory.value = task ? task.category : settings.defaultCategory;
       els.taskNote.value = task ? task.note || "" : "";
-      pendingImage = task?.image || null;
-      updateImagePreview();
+      pendingBlocks = task ? getTaskBlocks(task).map(block => ({ ...block })) : [];
+      renderContentBlocks();
       els.saveTemplateCheck.checked = false;
       renderTemplateStrip(els.taskDate.value);
       showBackdrop(els.modalBackdrop);
-      setTimeout(() => {
-        els.taskTitle.focus();
-        if (!task) inspectClipboard();
-      }, 0);
+      setTimeout(() => els.taskTitle.focus(), 0);
     }
 
     function closeModal() {
       hideBackdrop(els.modalBackdrop);
       editingId = null;
-      pendingImage = null;
+      pendingBlocks = [];
       els.taskForm.reset();
-      updateImagePreview();
+      renderContentBlocks();
+    }
+
+    function showTaskDatePicker() {
+      try {
+        els.taskDate.showPicker?.();
+      } catch {}
     }
 
     function openSettings() {
@@ -2125,6 +2292,7 @@
     }
 
     function openAuth() {
+      setAuthMode("login");
       updateCloudUi();
       showBackdrop(els.authBackdrop);
       setTimeout(() => els.authEmail.focus(), 0);
@@ -2133,6 +2301,25 @@
     function closeAuth() {
       hideBackdrop(els.authBackdrop);
       els.authForm.reset();
+    }
+
+    function setAuthMode(mode) {
+      authMode = mode === "signup" ? "signup" : "login";
+      updateAuthModeUi();
+    }
+
+    function updateAuthModeUi() {
+      const signingUp = authMode === "signup";
+      els.authTitle.textContent = signingUp ? "注册账号" : "登录账号";
+      els.authSubmitBtn.textContent = signingUp ? "发送确认邮件" : "登录";
+      els.authSwitchText.textContent = signingUp ? "已有账号？" : "没有账号？";
+      els.authModeBtn.textContent = signingUp ? "登录" : "注册";
+      els.authPassword.autocomplete = signingUp ? "new-password" : "current-password";
+      if (!currentUser) {
+        els.authStatusText.textContent = signingUp
+          ? "填写邮箱和密码后会发送确认邮件，请在邮箱里完成注册。"
+          : "登录后会把任务、模板和设置同步到云端。";
+      }
     }
 
     function showBackdrop(el) {
@@ -2194,10 +2381,10 @@
         date: els.taskDate.value,
         category: els.taskCategory.value,
         note: els.taskNote.value.trim(),
-        image: pendingImage
+        contentBlocks: normalizeContentBlocks(pendingBlocks)
       };
-      if (!payload.title && payload.image) payload.title = "图片事项";
-      if (!payload.title) return showToast("请输入任务内容或粘贴图片");
+      if (!payload.title && payload.contentBlocks.length) payload.title = deriveTitleFromBlocks(payload.contentBlocks);
+      if (!payload.title) return showToast("请输入任务标题或粘贴内容");
       if (editingId) {
         tasks = tasks.map(task => task.id === editingId ? { ...task, ...payload } : task);
         showToast("已保存");
@@ -2236,73 +2423,50 @@
       showToast("已删除");
     }
 
-    async function inspectClipboard() {
-      if (!navigator.clipboard) {
-        els.pasteHint.textContent = "当前浏览器不允许自动读取剪贴板，可在这里按 Ctrl+V 粘贴。";
-        return;
-      }
-      try {
-        if (navigator.clipboard.read) {
-          const items = await navigator.clipboard.read();
-          for (const item of items) {
-            const imageType = item.types.find(type => type.startsWith("image/"));
-            if (imageType) {
-              const blob = await item.getType(imageType);
-              await setPendingImage(blob);
-              showToast("已识别剪贴板图片");
-              return;
-            }
-          }
-        }
-        if (navigator.clipboard.readText) {
-          const text = (await navigator.clipboard.readText()).trim();
-          if (text && !els.taskTitle.value.trim()) {
-            els.taskTitle.value = text.slice(0, 500);
-            showToast("已填入剪贴板文字");
-          }
-        }
-      } catch {
-        els.pasteHint.textContent = "未获得剪贴板权限，可在这里按 Ctrl+V 粘贴图片或文字。";
-      }
-    }
-
     async function handleTaskPaste(event) {
       const items = [...(event.clipboardData?.items || [])];
-      const imageItem = items.find(item => item.type.startsWith("image/"));
-      if (imageItem) {
-        event.preventDefault();
-        await setPendingImage(imageItem.getAsFile());
-        showToast("已粘贴图片");
-        return;
+      let added = 0;
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          event.preventDefault();
+          const image = await compressImage(item.getAsFile());
+          pendingBlocks.push({ type: "image", ...image });
+          added++;
+        }
       }
       const text = event.clipboardData?.getData("text/plain")?.trim();
-      if (text && event.target === els.pasteZone) {
+      if (text) {
         event.preventDefault();
-        els.taskTitle.value = text.slice(0, 500);
-        showToast("已填入文字");
+        pendingBlocks.push({ type: "text", text });
+        if (!els.taskTitle.value.trim()) els.taskTitle.value = text.split(/\r?\n/)[0].slice(0, 80);
+        added++;
+      }
+      if (added) {
+        renderContentBlocks();
+        showToast(`已粘贴 ${added} 项内容`);
       }
     }
 
-    async function setPendingImage(file) {
-      if (!file) return;
-      pendingImage = await compressImage(file);
-      updateImagePreview();
+    function renderContentBlocks() {
+      els.pasteZone.classList.toggle("is-ready", pendingBlocks.length > 0);
+      els.pasteHint.textContent = pendingBlocks.length
+        ? "已粘贴内容，可继续粘贴或移除单项。"
+        : "在这里按 Ctrl+V 粘贴文字或图片，内容会按粘贴顺序保存。";
+      els.contentBlocks.innerHTML = pendingBlocks.map((block, index) => {
+        const body = block.type === "image"
+          ? `<img src="${escapeAttr(block.src)}" alt="粘贴图片 ${index + 1}" />`
+          : `<p>${escapeHtml(block.text)}</p>`;
+        return `<div class="content-block">
+          ${body}
+          <div class="content-block-actions"><button class="mini-btn bad" type="button" onclick="removeContentBlock(${index})">×</button></div>
+        </div>`;
+      }).join("");
     }
 
-    function clearPendingImage() {
-      pendingImage = null;
-      updateImagePreview();
-      showToast("已移除图片");
-    }
-
-    function updateImagePreview() {
-      const hasImage = Boolean(pendingImage?.src);
-      els.imagePreview.classList.toggle("show", hasImage);
-      els.pasteZone.classList.toggle("is-ready", hasImage);
-      els.imagePreviewImg.src = hasImage ? pendingImage.src : "";
-      els.pasteHint.textContent = hasImage
-        ? "图片会作为事项主体展示；也可以继续填写标题和备注。"
-        : "打开后会尝试读取剪贴板；也可以在这里按 Ctrl+V 粘贴图片或文字。";
+    function removeContentBlock(index) {
+      pendingBlocks.splice(index, 1);
+      renderContentBlocks();
+      showToast("已移除内容");
     }
 
     function compressImage(file) {
@@ -2582,14 +2746,21 @@
       showToast("云端配置已保存");
     }
 
-    async function signIn(event) {
+    function handleAuthSubmit(event) {
       event.preventDefault();
+      if (authMode === "signup") return signUp();
+      return signIn();
+    }
+
+    async function signIn() {
       if (!ensureCloudClient()) return;
       const email = els.authEmail.value.trim();
       const password = els.authPassword.value;
       if (!email || !password) return showToast("请填写邮箱和密码");
       try {
         setCloudStatus("syncing");
+        els.authSubmitBtn.disabled = true;
+        els.authSubmitBtn.textContent = "登录中";
         const session = await cloudRequest("/auth/v1/token?grant_type=password", {
           method: "POST",
           body: JSON.stringify({ email, password })
@@ -2598,7 +2769,11 @@
         await loadCloudData();
       } catch (error) {
         setCloudStatus("error");
+        els.authStatusText.textContent = getAuthErrorMessage(error);
         return showToast(error.message || "登录失败");
+      } finally {
+        els.authSubmitBtn.disabled = false;
+        els.authSubmitBtn.textContent = authMode === "signup" ? "发送确认邮件" : "登录";
       }
       closeAuth();
       showToast("已登录");
@@ -2611,7 +2786,9 @@
       if (!email || password.length < 6) return showToast("请填写邮箱和至少 6 位密码");
       try {
         setCloudStatus("syncing");
-        const session = await cloudRequest("/auth/v1/signup", {
+        els.authSubmitBtn.disabled = true;
+        els.authSubmitBtn.textContent = "发送中";
+        const session = await cloudRequest(`/auth/v1/signup?redirect_to=${encodeURIComponent(getSiteUrl())}`, {
           method: "POST",
           body: JSON.stringify({ email, password })
         }, false);
@@ -2621,11 +2798,51 @@
           closeAuth();
           showToast("注册并登录成功");
         } else {
-          showToast("注册成功，请按邮箱验证要求完成登录");
+          setCloudStatus("idle");
+          els.authStatusText.textContent = "确认邮件已发送，请到邮箱点击确认链接后再回来登录。";
+          showToast("确认邮件已发送");
         }
       } catch (error) {
         setCloudStatus("error");
+        els.authStatusText.textContent = getAuthErrorMessage(error);
         showToast(error.message || "注册失败");
+      } finally {
+        els.authSubmitBtn.disabled = false;
+        els.authSubmitBtn.textContent = authMode === "signup" ? "发送确认邮件" : "登录";
+      }
+    }
+
+    async function handleAuthRedirect() {
+      const params = new URLSearchParams(window.location.search);
+      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const error = params.get("error_description") || hash.get("error_description");
+      if (error) {
+        showToast(decodeURIComponent(error));
+        history.replaceState(null, "", getSiteUrl());
+        openAuth();
+        return;
+      }
+      const accessToken = hash.get("access_token");
+      const refreshToken = hash.get("refresh_token");
+      if (accessToken && refreshToken) {
+        ensureCloudClient();
+        setCloudSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          expires_in: Number(hash.get("expires_in")) || 3600,
+          token_type: hash.get("token_type") || "bearer",
+          user: null
+        });
+        history.replaceState(null, "", getSiteUrl());
+        showToast("注册成功，正在加载云端数据");
+        await loadCloudData();
+        return;
+      }
+      const type = params.get("type") || hash.get("type");
+      if (type === "signup" || type === "email_change") {
+        history.replaceState(null, "", getSiteUrl());
+        showToast("邮箱确认成功，请登录");
+        openAuth();
       }
     }
 
@@ -2738,6 +2955,18 @@
       return { url, anonKey };
     }
 
+    function getSiteUrl() {
+      return `${window.location.origin}${window.location.pathname}`;
+    }
+
+    function getAuthErrorMessage(error) {
+      const message = String(error?.message || "");
+      if (/invalid login/i.test(message)) return "邮箱或密码不正确。";
+      if (/email not confirmed/i.test(message)) return "邮箱还没有确认，请先点击确认邮件里的链接。";
+      if (/already registered|already exists/i.test(message)) return "这个邮箱已经注册，请直接登录。";
+      return message || "操作失败，请稍后重试。";
+    }
+
     function loadCloudSession() {
       try {
         const raw = localStorage.getItem(SUPABASE_SESSION_KEY);
@@ -2750,10 +2979,20 @@
     function setCloudSession(session) {
       if (!session?.access_token) throw new Error("登录响应无效");
       session.expires_at_ms = Date.now() + Math.max(Number(session.expires_in || 3600) - 60, 60) * 1000;
+      session.user = session.user || parseJwtUser(session.access_token);
       localStorage.setItem(SUPABASE_SESSION_KEY, JSON.stringify(session));
       supabaseClient.session = session;
       currentUser = session.user || currentUser;
       updateCloudUi();
+    }
+
+    function parseJwtUser(token) {
+      try {
+        const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+        return { id: payload.sub, email: payload.email };
+      } catch {
+        return null;
+      }
     }
 
     async function refreshCloudSession() {
@@ -3055,35 +3294,57 @@
     function normalizeTasks(rows) {
       if (!Array.isArray(rows)) return [];
       return rows
-        .filter(row => row && (row.title || row.image?.src))
-        .map(row => ({
-          id: row.id || createId(),
-          title: String(row.title || row.text || (row.image?.src ? "图片事项" : "")).trim(),
-          date: isDateKey(row.date) ? row.date : toKey(new Date()),
-          category: CATEGORIES.some(cat => cat.id === row.category) ? row.category : (CATEGORIES.some(cat => cat.id === row.cat) ? row.cat : "work"),
-          note: String(row.note || ""),
-          done: Boolean(row.done),
-          image: normalizeImage(row.image),
-          sortIndex: Number.isFinite(Number(row.sortIndex)) ? Number(row.sortIndex) : Number(row.createdAt) || Date.now(),
-          createdAt: Number(row.createdAt) || Date.now()
-        }))
+        .filter(row => row && (row.title || row.image?.src || row.contentBlocks?.length))
+        .map(row => {
+          const contentBlocks = normalizeContentBlocks(row.contentBlocks || (row.image?.src ? [{ type: "image", ...row.image }] : []));
+          return {
+            id: row.id || createId(),
+            title: String(row.title || row.text || deriveTitleFromBlocks(contentBlocks)).trim(),
+            date: isDateKey(row.date) ? row.date : toKey(new Date()),
+            category: CATEGORIES.some(cat => cat.id === row.category) ? row.category : (CATEGORIES.some(cat => cat.id === row.cat) ? row.cat : "work"),
+            note: String(row.note || ""),
+            done: Boolean(row.done),
+            contentBlocks,
+            sortIndex: Number.isFinite(Number(row.sortIndex)) ? Number(row.sortIndex) : Number(row.createdAt) || Date.now(),
+            createdAt: Number(row.createdAt) || Date.now()
+          };
+        })
         .filter(row => row.title);
     }
 
-    function normalizeImage(image) {
-      if (!image || typeof image !== "object" || typeof image.src !== "string" || !image.src.startsWith("data:image/")) return null;
-      return {
-        src: image.src,
-        width: Number(image.width) || 0,
-        height: Number(image.height) || 0,
-        type: image.type || "image/webp",
-        createdAt: Number(image.createdAt) || Date.now()
-      };
+    function normalizeContentBlocks(blocks) {
+      if (!Array.isArray(blocks)) return [];
+      return blocks.map(block => {
+        if (block?.type === "image" && typeof block.src === "string" && block.src.startsWith("data:image/")) {
+          return {
+            type: "image",
+            src: block.src,
+            width: Number(block.width) || 0,
+            height: Number(block.height) || 0,
+            mime: block.mime || block.type || "image/webp",
+            createdAt: Number(block.createdAt) || Date.now()
+          };
+        }
+        if (block?.type === "text" && String(block.text || "").trim()) {
+          return { type: "text", text: String(block.text).trim(), createdAt: Number(block.createdAt) || Date.now() };
+        }
+        return null;
+      }).filter(Boolean).slice(0, 20);
+    }
+
+    function getTaskBlocks(task) {
+      return normalizeContentBlocks(task.contentBlocks || (task.image?.src ? [{ type: "image", ...task.image }] : []));
+    }
+
+    function deriveTitleFromBlocks(blocks) {
+      const text = blocks.find(block => block.type === "text")?.text;
+      if (text) return text.split(/\r?\n/)[0].slice(0, 80);
+      if (blocks.some(block => block.type === "image")) return "图片事项";
+      return "";
     }
 
     function taskOrder(a, b) {
-      return Number(a.done) - Number(b.done)
-        || (Number(a.sortIndex) || Number(a.createdAt) || 0) - (Number(b.sortIndex) || Number(b.createdAt) || 0)
+      return (Number(a.sortIndex) || Number(a.createdAt) || 0) - (Number(b.sortIndex) || Number(b.createdAt) || 0)
         || (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0);
     }
 
