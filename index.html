@@ -350,14 +350,37 @@
       align-items: baseline;
       gap: 6px;
       min-width: 0;
+      flex: 1 1 auto;
+      overflow: hidden;
     }
 
     .date-inline-meta {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 4px;
+      min-width: 0;
+      overflow: hidden;
       color: var(--muted);
       font-size: 11px;
       font-weight: 650;
       line-height: 1;
       white-space: nowrap;
+    }
+
+    .date-inline-chip {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .date-inline-chip.special {
+      color: var(--special-color, var(--primary));
+      font-weight: 800;
+    }
+
+    .date-inline-sep {
+      color: var(--quiet);
+      flex: 0 0 auto;
     }
 
     .date-extra {
@@ -1091,7 +1114,7 @@
 
     .special-editor {
       display: grid;
-      grid-template-columns: 112px 64px 64px minmax(0, 1fr) auto;
+      grid-template-columns: 112px 64px 64px minmax(160px, 1fr) auto;
       gap: 8px;
       align-items: center;
     }
@@ -1116,7 +1139,8 @@
     }
 
     .special-item {
-      display: flex;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
       align-items: center;
       gap: 8px;
       min-height: 34px;
@@ -1136,10 +1160,16 @@
     }
 
     .special-item span:nth-child(2) {
-      flex: 1;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .special-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
       white-space: nowrap;
     }
 
@@ -3836,8 +3866,10 @@
         <div class="special-item" data-special-id="${item.id}">
           <span class="special-dot" style="--special-color:${item.color}"></span>
           <span>${escapeHtml(item.name)} · ${item.type === "lunar" ? "农历" : "公历"} ${item.month}月${item.day}日</span>
-          <button class="mini-btn" type="button" onclick="editSpecialDate('${item.id}')">编辑</button>
-          <button class="mini-btn bad" type="button" onclick="removeSpecialDate('${item.id}')">×</button>
+          <span class="special-actions">
+            <button class="mini-btn" type="button" onclick="editSpecialDate('${item.id}')">编辑</button>
+            <button class="mini-btn bad" type="button" onclick="removeSpecialDate('${item.id}')">×</button>
+          </span>
         </div>
       `).join("")}</div>`;
     }
@@ -3864,6 +3896,7 @@
       }
       resetSpecialDateEditor();
       renderSpecialDateList();
+      renderVisibleWeeks();
     }
 
     function editSpecialDate(id) {
@@ -3897,6 +3930,7 @@
       settings.specialDates = settings.specialDates.filter(item => item.id !== id);
       if (editingSpecialDateId === id) resetSpecialDateEditor();
       renderSpecialDateList();
+      renderVisibleWeeks();
       showToast("特殊日期已删除");
     }
 
@@ -3905,14 +3939,23 @@
     }
 
     function renderDateInlineMeta(date, marks) {
-      const parts = [];
+      const chips = [];
       const lunar = getLunarInfo(date);
-      if (settings.lunarEnabled && lunar?.display) parts.push(lunar.display);
-      marks.forEach(mark => {
-        if (mark.name && !parts.includes(mark.name)) parts.push(mark.name);
-      });
-      if (!parts.length) return "";
-      return `<span class="date-inline-meta">${parts.slice(0, 3).map(escapeHtml).join(" · ")}</span>`;
+      const pushChip = mark => {
+        if (!mark?.name || chips.some(chip => chip.name === mark.name)) return;
+        chips.push(mark);
+      };
+      if (settings.lunarEnabled && lunar?.display) pushChip({ kind: "lunar", name: lunar.display });
+      marks.filter(mark => mark.kind === "special").forEach(pushChip);
+      marks.filter(mark => mark.kind !== "special").forEach(pushChip);
+      if (!chips.length) return "";
+      return `<span class="date-inline-meta" title="${escapeAttr(chips.map(chip => chip.name).join(" · "))}">
+        ${chips.map((chip, index) => {
+          const style = chip.kind === "special" ? ` style="--special-color:${chip.color}"` : "";
+          const sep = index ? '<span class="date-inline-sep">·</span>' : "";
+          return `${sep}<span class="date-inline-chip ${chip.kind}"${style}>${escapeHtml(chip.name)}</span>`;
+        }).join("")}
+      </span>`;
     }
 
     function getDateMarks(date) {
@@ -3923,6 +3966,9 @@
       const official = settings.holidayEnabled ? getOfficialHoliday(date) : null;
       const holiday = official || (settings.holidayEnabled ? HOLIDAY_2026[key] : null);
       if (holiday) marks.push({ kind: holiday.type === "workday" ? "workday" : "holiday", name: holiday.name });
+      for (const item of settings.specialDates) {
+        if (matchesSpecialDate(item, date, lunar)) marks.push({ kind: "special", name: item.name, color: item.color });
+      }
       const solarFestival = SOLAR_FESTIVALS[monthDay];
       if (solarFestival && !marks.some(mark => mark.name === solarFestival)) marks.push({ kind: "festival", name: solarFestival });
       if (lunar) {
@@ -3931,9 +3977,6 @@
       }
       const term = settings.solarTermEnabled ? getSolarTerm(date) : "";
       if (term && !marks.some(mark => mark.name === term)) marks.push({ kind: "term", name: term });
-      for (const item of settings.specialDates) {
-        if (matchesSpecialDate(item, date, lunar)) marks.push({ kind: "special", name: item.name, color: item.color });
-      }
       return marks;
     }
 
@@ -3975,17 +4018,12 @@
 
     function getSolarTerm(date) {
       const chineseDays = window.chineseDays;
-      if (chineseDays?.getSolarTermsInRange) {
-        try {
-          const items = chineseDays.getSolarTermsInRange(toKey(date), toKey(date)) || [];
-          const item = items.find(row => row?.name);
-          if (item?.name) return item.name;
-        } catch {}
-      }
+      const key = toKey(date);
       if (chineseDays?.getSolarTerms) {
         try {
-          const items = chineseDays.getSolarTerms(toKey(date), toKey(date)) || [];
-          const item = Array.isArray(items) ? items.find(row => row?.name) : null;
+          let items = chineseDays.getSolarTerms(key) || [];
+          if (!Array.isArray(items) || !items.length) items = chineseDays.getSolarTerms(key, key) || [];
+          const item = Array.isArray(items) ? items.find(row => row?.date === key && row?.name) : null;
           if (item?.name) return item.name;
         } catch {}
       }
