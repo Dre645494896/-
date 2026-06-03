@@ -540,6 +540,7 @@
       gap: 6px;
       align-items: center;
       cursor: grab;
+      touch-action: none;
       transition: box-shadow .15s ease, transform .15s ease, opacity .15s ease;
     }
 
@@ -568,6 +569,7 @@
 
     body.dragging-task {
       user-select: none;
+      cursor: grabbing;
     }
 
     .task.done {
@@ -1755,15 +1757,8 @@
     let lastSunday = null;
     let editingId = null;
     let loadingMore = false;
-    let draggingTaskId = null;
-    let dropBeforeTaskId = null;
-    let pointerDrag = null;
-    let notePointerDrag = null;
-    let draggingNoteId = null;
-    let dropBeforeNoteId = null;
+    let activeDrag = null;
     let suppressNextClick = false;
-    let mouseDrag = null;
-    let noteMouseDrag = null;
     let pendingBlocks = [];
     let selectedDateKey = null;
     let modalMode = "task";
@@ -1925,18 +1920,13 @@
           closeAuth();
         }
       });
-      document.addEventListener("dragstart", handleDragStart);
-      document.addEventListener("dragend", handleDragEnd);
-      document.addEventListener("dragover", handleDragOver);
-      document.addEventListener("dragleave", handleDragLeave);
-      document.addEventListener("drop", handleDrop);
       document.addEventListener("pointerdown", handlePointerDragStart);
       document.addEventListener("pointermove", handlePointerDragMove);
       document.addEventListener("pointerup", handlePointerDragEnd);
       document.addEventListener("pointercancel", handlePointerDragEnd);
-      document.addEventListener("mousedown", handleMouseDragStart);
-      document.addEventListener("mousemove", handleMouseDragMove);
-      document.addEventListener("mouseup", handleMouseDragEnd);
+      document.addEventListener("mousedown", handleLegacyDragStart);
+      document.addEventListener("mousemove", handleLegacyDragMove);
+      document.addEventListener("mouseup", handleLegacyDragEnd);
       document.addEventListener("click", handleDocumentClick);
       document.addEventListener("copy", handleDocumentCopy);
       window.addEventListener("scroll", throttle(updateMonthFromScroll, 80));
@@ -2105,331 +2095,229 @@
         .sort(noteOrder);
     }
 
-    function handleDragStart(event) {
-      if (!settings.dragEnabled) {
-        event.preventDefault();
-        return;
-      }
-      const taskEl = event.target.closest(".task");
-      if (!taskEl) return;
-      if (event.target.closest("button")) {
-        event.preventDefault();
-        return;
-      }
-      draggingTaskId = taskEl.dataset.taskId;
-      taskEl.classList.add("dragging");
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/plain", draggingTaskId);
-    }
-
-    function handleDragEnd() {
-      draggingTaskId = null;
-      dropBeforeTaskId = null;
-      document.querySelectorAll(".task.dragging").forEach(el => el.classList.remove("dragging"));
-      document.querySelectorAll(".day.drag-over").forEach(el => el.classList.remove("drag-over"));
-      document.querySelectorAll(".drop-marker").forEach(el => el.remove());
-    }
-
-    function handleDragOver(event) {
-      if (!settings.dragEnabled || !draggingTaskId) return;
-      const day = event.target.closest(".day");
-      if (!day) return;
-      event.preventDefault();
-      event.dataTransfer.dropEffect = "move";
-      document.querySelectorAll(".day.drag-over").forEach(el => {
-        if (el !== day) el.classList.remove("drag-over");
-      });
-      day.classList.add("drag-over");
-      const position = getDropPosition(day, event.clientY);
-      dropBeforeTaskId = position.beforeId;
-      placeDropMarker(day, position.beforeId);
-    }
-
-    function handleDragLeave(event) {
-      const day = event.target.closest(".day");
-      if (!day || day.contains(event.relatedTarget)) return;
-      day.classList.remove("drag-over");
-    }
-
-    function handleDrop(event) {
-      if (!settings.dragEnabled || !draggingTaskId) return;
-      const day = event.target.closest(".day");
-      if (!day) return;
-      event.preventDefault();
-      const targetDate = day.dataset.date;
-      moveTaskToDate(draggingTaskId, targetDate, dropBeforeTaskId);
-      handleDragEnd();
-    }
-
     function handlePointerDragStart(event) {
-      if (!settings.dragEnabled || event.button !== 0 || event.target.closest("button, input, select, textarea, [contenteditable='true']")) return;
-      const noteEl = event.target.closest(".day-note");
-      if (noteEl) {
-        notePointerDrag = {
-          id: noteEl.dataset.noteId,
-          startX: event.clientX,
-          startY: event.clientY,
-          active: false,
-          el: noteEl,
-          pointerId: event.pointerId
-        };
-        return;
-      }
-      const taskEl = event.target.closest(".task");
-      if (!taskEl) return;
-      pointerDrag = {
-        id: taskEl.dataset.taskId,
-        startX: event.clientX,
-        startY: event.clientY,
-        active: false,
-        el: taskEl,
-        pointerId: event.pointerId
-      };
+      beginUnifiedDrag(event, "pointer");
     }
 
     function handlePointerDragMove(event) {
-      if (notePointerDrag && notePointerDrag.pointerId === event.pointerId) {
-        handleNotePointerDragMove(event);
-        return;
-      }
-      if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
-      const distance = Math.hypot(event.clientX - pointerDrag.startX, event.clientY - pointerDrag.startY);
-      if (!pointerDrag.active && distance < 8) return;
-      event.preventDefault();
-      if (!pointerDrag.active) {
-        pointerDrag.active = true;
-        draggingTaskId = pointerDrag.id;
-        pointerDrag.el.classList.add("dragging");
-        document.body.classList.add("dragging-task");
-        pointerDrag.el.setPointerCapture?.(event.pointerId);
-      }
-      updatePointerDropTarget(event.clientX, event.clientY);
+      updateUnifiedDrag(event, "pointer");
     }
 
     function handlePointerDragEnd(event) {
-      if (notePointerDrag && notePointerDrag.pointerId === event.pointerId) {
-        handleNotePointerDragEnd(event);
-        return;
-      }
-      if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
-      const drag = pointerDrag;
-      pointerDrag = null;
-      drag.el.releasePointerCapture?.(event.pointerId);
-      if (drag.active) {
-        suppressNextClick = true;
-        const day = document.elementFromPoint(event.clientX, event.clientY)?.closest(".day");
-        if (day) {
-          const position = getDropPosition(day, event.clientY);
-          moveTaskToDate(drag.id, day.dataset.date, position.beforeId);
-        }
-      }
-      drag.el.classList.remove("dragging");
-      document.body.classList.remove("dragging-task");
-      document.querySelectorAll(".day.drag-over").forEach(el => el.classList.remove("drag-over"));
-      document.querySelectorAll(".drop-marker").forEach(el => el.remove());
-      draggingTaskId = null;
-      dropBeforeTaskId = null;
+      finishUnifiedDrag(event, "pointer");
     }
 
-    function updatePointerDropTarget(clientX, clientY) {
-      const day = document.elementFromPoint(clientX, clientY)?.closest(".day");
-      document.querySelectorAll(".day.drag-over").forEach(el => {
-        if (el !== day) el.classList.remove("drag-over");
-      });
-      if (!day) {
-        document.querySelectorAll(".drop-marker").forEach(el => el.remove());
-        dropBeforeTaskId = null;
-        return;
-      }
-      day.classList.add("drag-over");
-      const position = getDropPosition(day, clientY);
-      dropBeforeTaskId = position.beforeId;
-      placeDropMarker(day, position.beforeId);
+    function handleLegacyDragStart(event) {
+      if (activeDrag) return;
+      beginUnifiedDrag(event, "mouse");
     }
 
-    function handleNotePointerDragMove(event) {
-      const distance = Math.hypot(event.clientX - notePointerDrag.startX, event.clientY - notePointerDrag.startY);
-      if (!notePointerDrag.active && distance < 8) return;
-      event.preventDefault();
-      if (!notePointerDrag.active) {
-        notePointerDrag.active = true;
-        draggingNoteId = notePointerDrag.id;
-        notePointerDrag.el.classList.add("dragging");
-        document.body.classList.add("dragging-task");
-        notePointerDrag.el.setPointerCapture?.(event.pointerId);
-      }
-      updateNoteDropTarget(event.clientX, event.clientY);
+    function handleLegacyDragMove(event) {
+      updateUnifiedDrag(event, "mouse");
     }
 
-    function handleNotePointerDragEnd(event) {
-      const drag = notePointerDrag;
-      notePointerDrag = null;
-      drag.el.releasePointerCapture?.(event.pointerId);
-      if (drag.active) {
-        suppressNextClick = true;
-        const day = document.elementFromPoint(event.clientX, event.clientY)?.closest(".day");
-        if (day) {
-          const position = getNoteDropPosition(day, event.clientY);
-          moveNoteToDate(drag.id, day.dataset.date, position.beforeId);
-        }
-      }
-      drag.el.classList.remove("dragging");
-      document.body.classList.remove("dragging-task");
-      document.querySelectorAll(".day.drag-over").forEach(el => el.classList.remove("drag-over"));
-      document.querySelectorAll(".note-drop-marker").forEach(el => el.remove());
-      draggingNoteId = null;
-      dropBeforeNoteId = null;
+    function handleLegacyDragEnd(event) {
+      finishUnifiedDrag(event, "mouse");
     }
 
-    function updateNoteDropTarget(clientX, clientY) {
-      const day = document.elementFromPoint(clientX, clientY)?.closest(".day");
-      document.querySelectorAll(".day.drag-over").forEach(el => {
-        if (el !== day) el.classList.remove("drag-over");
-      });
-      if (!day) {
-        document.querySelectorAll(".note-drop-marker").forEach(el => el.remove());
-        dropBeforeNoteId = null;
-        return;
-      }
-      day.classList.add("drag-over");
-      const position = getNoteDropPosition(day, clientY);
-      dropBeforeNoteId = position.beforeId;
-      placeNoteDropMarker(day, position.beforeId);
-    }
-
-    function getNoteDropPosition(day, clientY) {
-      const noteEls = [...day.querySelectorAll(".day-note:not(.dragging)")];
-      for (const el of noteEls) {
-        const rect = el.getBoundingClientRect();
-        if (clientY < rect.top + rect.height / 2) {
-          return { beforeId: el.dataset.noteId };
-        }
-      }
-      return { beforeId: null };
-    }
-
-    function placeNoteDropMarker(day, beforeId) {
-      document.querySelectorAll(".note-drop-marker").forEach(el => el.remove());
-      const list = day.querySelector(".day-notes");
-      if (!list) return;
-      const marker = document.createElement("div");
-      marker.className = "note-drop-marker";
-      const beforeEl = beforeId ? list.querySelector(`.day-note[data-note-id="${beforeId}"]`) : null;
-      list.insertBefore(marker, beforeEl || null);
-    }
-
-    function handleMouseDragStart(event) {
-      if (pointerDrag || notePointerDrag) return;
-      if (!settings.dragEnabled) return;
-      if (event.button !== 0 || event.target.closest("button, input, select, textarea, [contenteditable='true']")) return;
+    function beginUnifiedDrag(event, source) {
+      if (!settings.dragEnabled || event.button !== 0 || activeDrag) return;
+      if (event.target.closest("button, input, select, textarea, [contenteditable='true']")) return;
       const noteEl = event.target.closest(".day-note");
-      if (noteEl) {
-        noteMouseDrag = {
-          id: noteEl.dataset.noteId,
-          startX: event.clientX,
-          startY: event.clientY,
-          active: false,
-          el: noteEl
-        };
-        return;
-      }
-      const taskEl = event.target.closest(".task");
-      if (!taskEl) return;
-      mouseDrag = {
-        id: taskEl.dataset.taskId,
+      const taskEl = noteEl ? null : event.target.closest(".task");
+      const el = noteEl || taskEl;
+      if (!el) return;
+      const type = noteEl ? "note" : "task";
+      activeDrag = {
+        source,
+        pointerId: source === "pointer" ? event.pointerId : null,
+        type,
+        id: type === "note" ? el.dataset.noteId : el.dataset.taskId,
+        sourceDate: type === "note" ? el.dataset.noteDate : el.dataset.taskDate,
         startX: event.clientX,
         startY: event.clientY,
+        x: event.clientX,
+        y: event.clientY,
         active: false,
-        el: taskEl
+        el,
+        preview: null,
+        targetDate: null,
+        beforeId: null
       };
     }
 
-    function handleMouseDragMove(event) {
-      if (noteMouseDrag) {
-        const distance = Math.hypot(event.clientX - noteMouseDrag.startX, event.clientY - noteMouseDrag.startY);
-        if (!noteMouseDrag.active && distance < 8) return;
-        event.preventDefault();
-        noteMouseDrag.active = true;
-        noteMouseDrag.el.classList.add("dragging");
-        document.body.classList.add("dragging-task");
-        updateNoteDropTarget(event.clientX, event.clientY);
-        return;
-      }
-      if (!mouseDrag) return;
-      const distance = Math.hypot(event.clientX - mouseDrag.startX, event.clientY - mouseDrag.startY);
-      if (!mouseDrag.active && distance < 8) return;
+    function updateUnifiedDrag(event, source) {
+      if (!activeDrag || activeDrag.source !== source) return;
+      if (source === "pointer" && activeDrag.pointerId !== event.pointerId) return;
+      const distance = Math.hypot(event.clientX - activeDrag.startX, event.clientY - activeDrag.startY);
+      if (!activeDrag.active && distance < 8) return;
       event.preventDefault();
-      mouseDrag.active = true;
-      mouseDrag.el.classList.add("dragging");
+      if (!activeDrag.active) activateUnifiedDrag(event);
+      activeDrag.x = event.clientX;
+      activeDrag.y = event.clientY;
+      moveDragPreview(event.clientX, event.clientY);
+      updateUnifiedDropTarget(event.clientX, event.clientY);
+    }
+
+    function activateUnifiedDrag(event) {
+      activeDrag.active = true;
+      activeDrag.el.classList.add("dragging");
+      activeDrag.el.setPointerCapture?.(event.pointerId);
       document.body.classList.add("dragging-task");
-      const day = document.elementFromPoint(event.clientX, event.clientY)?.closest(".day");
+      activeDrag.preview = createDragPreview(activeDrag.el);
+      moveDragPreview(event.clientX, event.clientY);
+    }
+
+    function finishUnifiedDrag(event, source) {
+      if (!activeDrag || activeDrag.source !== source) return;
+      if (source === "pointer" && activeDrag.pointerId !== event.pointerId) return;
+      const drag = activeDrag;
+      drag.el.releasePointerCapture?.(event.pointerId);
+      if (drag.active) {
+        suppressNextClick = true;
+        const day = getDropDayAt(event.clientX, event.clientY);
+        const targetDate = day?.dataset.date || drag.targetDate;
+        if (targetDate) {
+          const position = day ? getUnifiedDropPosition(day, drag.type, event.clientY) : { beforeId: drag.beforeId };
+          if (drag.type === "task") moveTaskToDate(drag.id, targetDate, position.beforeId);
+          if (drag.type === "note") moveNoteToDate(drag.id, targetDate, position.beforeId);
+        }
+      }
+      activeDrag = null;
+      cleanupUnifiedDrag(drag);
+    }
+
+    function createDragPreview(el) {
+      const rect = el.getBoundingClientRect();
+      const preview = el.cloneNode(true);
+      preview.classList.add("drag-preview");
+      preview.classList.remove("dragging");
+      preview.style.width = `${rect.width}px`;
+      preview.style.height = `${rect.height}px`;
+      preview.style.left = "0";
+      preview.style.top = "0";
+      preview.style.setProperty("--drag-offset-x", `${activeDrag.startX - rect.left}px`);
+      preview.style.setProperty("--drag-offset-y", `${activeDrag.startY - rect.top}px`);
+      document.body.appendChild(preview);
+      return preview;
+    }
+
+    function moveDragPreview(clientX, clientY) {
+      if (!activeDrag?.preview) return;
+      const offsetX = Number.parseFloat(activeDrag.preview.style.getPropertyValue("--drag-offset-x")) || 0;
+      const offsetY = Number.parseFloat(activeDrag.preview.style.getPropertyValue("--drag-offset-y")) || 0;
+      activeDrag.preview.style.transform = `translate3d(${clientX - offsetX}px, ${clientY - offsetY}px, 0)`;
+    }
+
+    function updateUnifiedDropTarget(clientX, clientY) {
+      const day = getDropDayAt(clientX, clientY);
       document.querySelectorAll(".day.drag-over").forEach(el => {
         if (el !== day) el.classList.remove("drag-over");
       });
-      if (day) day.classList.add("drag-over");
-      if (day) {
-        const position = getDropPosition(day, event.clientY);
-        dropBeforeTaskId = position.beforeId;
-        placeDropMarker(day, position.beforeId);
-      }
-    }
-
-    function handleMouseDragEnd(event) {
-      if (noteMouseDrag) {
-        const drag = noteMouseDrag;
-        noteMouseDrag = null;
-        drag.el.classList.remove("dragging");
-        document.body.classList.remove("dragging-task");
-        document.querySelectorAll(".day.drag-over").forEach(el => el.classList.remove("drag-over"));
-        document.querySelectorAll(".note-drop-marker").forEach(el => el.remove());
-        if (!drag.active) return;
-        suppressNextClick = true;
-        const day = document.elementFromPoint(event.clientX, event.clientY)?.closest(".day");
-        if (day) {
-          const position = getNoteDropPosition(day, event.clientY);
-          moveNoteToDate(drag.id, day.dataset.date, position.beforeId);
-        }
-        draggingNoteId = null;
-        dropBeforeNoteId = null;
+      if (!day) {
+        clearDropMarkers();
         return;
       }
-      if (!mouseDrag) return;
-      const drag = mouseDrag;
-      mouseDrag = null;
-      drag.el.classList.remove("dragging");
-      document.body.classList.remove("dragging-task");
-      document.querySelectorAll(".day.drag-over").forEach(el => el.classList.remove("drag-over"));
-      document.querySelectorAll(".drop-marker").forEach(el => el.remove());
-      if (!drag.active) return;
-      suppressNextClick = true;
-      const day = document.elementFromPoint(event.clientX, event.clientY)?.closest(".day");
-      if (day) {
-        const position = getDropPosition(day, event.clientY);
-        moveTaskToDate(drag.id, day.dataset.date, position.beforeId);
-      }
+      day.classList.add("drag-over");
+      const position = getUnifiedDropPosition(day, activeDrag.type, clientY);
+      activeDrag.targetDate = day.dataset.date;
+      activeDrag.beforeId = position.beforeId;
+      placeUnifiedDropMarker(day, activeDrag.type, position.beforeId);
     }
 
-    function getDropPosition(day, clientY) {
-      const taskEls = [...day.querySelectorAll(".task:not(.dragging)")];
-      for (const el of taskEls) {
-        const rect = el.getBoundingClientRect();
-        if (clientY < rect.top + rect.height / 2) {
-          return { beforeId: el.dataset.taskId };
+    function getDropDayAt(clientX, clientY) {
+      const stack = document.elementsFromPoint(clientX, clientY);
+      const sourceDay = activeDrag?.sourceDate ? document.querySelector(`.day[data-date="${activeDrag.sourceDate}"]`) : null;
+      for (const el of stack) {
+        if (el.closest?.(".drag-preview, .dragging, .drop-marker, .note-drop-marker")) continue;
+        const day = el.closest?.(".day");
+        if (day) {
+          if (activeDrag?.type === "note" && sourceDay && day !== sourceDay) {
+            const sourceRect = sourceDay.getBoundingClientRect();
+            const stillSortingNearSource =
+              clientX >= sourceRect.left &&
+              clientX <= sourceRect.right &&
+              clientY >= sourceRect.top - 24 &&
+              clientY <= sourceRect.bottom + 90 &&
+              Math.abs(clientX - activeDrag.startX) < 72;
+            if (stillSortingNearSource) return sourceDay;
+          }
+          return day;
         }
+      }
+      return null;
+    }
+
+    function getUnifiedDropPosition(day, type, clientY) {
+      const selector = type === "note" ? ".day-note:not(.dragging)" : ".task:not(.dragging)";
+      const idName = type === "note" ? "noteId" : "taskId";
+      const items = [...day.querySelectorAll(selector)];
+      for (const el of items) {
+        const rect = el.getBoundingClientRect();
+        if (clientY < rect.top + rect.height / 2) return { beforeId: el.dataset[idName] };
       }
       return { beforeId: null };
     }
 
-    function placeDropMarker(day, beforeId) {
-      document.querySelectorAll(".drop-marker").forEach(el => el.remove());
-      const list = day.querySelector(".task-list");
+    function placeUnifiedDropMarker(day, type, beforeId) {
+      const list = day.querySelector(type === "note" ? ".day-notes" : ".task-list");
       if (!list) return;
-      const marker = document.createElement("div");
-      marker.className = "drop-marker";
-      const beforeEl = beforeId ? list.querySelector(`.task[data-task-id="${beforeId}"]`) : null;
-      list.insertBefore(marker, beforeEl || null);
+      const markerClass = type === "note" ? "note-drop-marker" : "drop-marker";
+      const itemSelector = type === "note" ? ".day-note" : ".task";
+      const idAttr = type === "note" ? "noteId" : "taskId";
+      const existing = list.querySelector(`.${markerClass}`);
+      const beforeEl = beforeId ? [...list.querySelectorAll(itemSelector)].find(el => el.dataset[idAttr] === beforeId) : null;
+      if (existing && existing.nextElementSibling === beforeEl) return;
+      animateListChange(list, () => {
+        clearDropMarkers();
+        const marker = document.createElement("div");
+        marker.className = markerClass;
+        list.insertBefore(marker, beforeEl || null);
+      });
     }
 
+    function animateListChange(list, mutate) {
+      const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      if (reduceMotion) {
+        mutate();
+        return;
+      }
+      const items = [...list.querySelectorAll(".task:not(.dragging), .day-note:not(.dragging)")];
+      const before = new Map(items.map(el => [el, el.getBoundingClientRect()]));
+      mutate();
+      requestAnimationFrame(() => {
+        for (const el of items) {
+          const first = before.get(el);
+          if (!first || !el.isConnected) continue;
+          const last = el.getBoundingClientRect();
+          const dx = first.left - last.left;
+          const dy = first.top - last.top;
+          if (!dx && !dy) continue;
+          el.style.transition = "none";
+          el.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+          requestAnimationFrame(() => {
+            el.style.transition = "transform .18s cubic-bezier(.2,.8,.2,1)";
+            el.style.transform = "translate3d(0,0,0)";
+            setTimeout(() => {
+              el.style.transition = "";
+              el.style.transform = "";
+            }, 210);
+          });
+        }
+      });
+    }
+
+    function clearDropMarkers() {
+      document.querySelectorAll(".drop-marker, .note-drop-marker").forEach(el => el.remove());
+    }
+
+    function cleanupUnifiedDrag(drag) {
+      drag.el.classList.remove("dragging");
+      drag.preview?.remove();
+      document.body.classList.remove("dragging-task");
+      document.querySelectorAll(".day.drag-over").forEach(el => el.classList.remove("drag-over"));
+      clearDropMarkers();
+    }
     function moveTaskToDate(taskId, targetDate, beforeId = null) {
       const task = tasks.find(item => item.id === taskId);
       if (!task || !targetDate) return false;
@@ -4023,23 +3911,30 @@
     }
 
     function taskOrder(a, b) {
-      return (Number(a.sortIndex) || Number(a.createdAt) || 0) - (Number(b.sortIndex) || Number(b.createdAt) || 0)
+      return orderValue(a) - orderValue(b)
         || (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0);
     }
 
     function noteOrder(a, b) {
-      return (Number(a.sortIndex) || Number(a.createdAt) || 0) - (Number(b.sortIndex) || Number(b.createdAt) || 0)
+      return orderValue(a) - orderValue(b)
         || (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0);
+    }
+
+    function orderValue(item) {
+      const sortIndex = Number(item.sortIndex);
+      if (Number.isFinite(sortIndex)) return sortIndex;
+      const createdAt = Number(item.createdAt);
+      return Number.isFinite(createdAt) ? createdAt : 0;
     }
 
     function nextSortIndex(dateKey) {
       const sameDay = tasks.filter(task => task.date === dateKey);
-      return sameDay.length ? Math.max(...sameDay.map(task => Number(task.sortIndex) || Number(task.createdAt) || 0)) + 1 : 0;
+      return sameDay.length ? Math.max(...sameDay.map(orderValue)) + 1 : 0;
     }
 
     function nextNoteSortIndex(dateKey) {
       const sameDay = dayNotes.filter(note => note.date === dateKey);
-      return sameDay.length ? Math.max(...sameDay.map(note => Number(note.sortIndex) || Number(note.createdAt) || 0)) + 1 : 0;
+      return sameDay.length ? Math.max(...sameDay.map(orderValue)) + 1 : 0;
     }
 
     function persist() {
