@@ -322,12 +322,37 @@
       box-shadow: inset 0 0 0 2px rgba(37, 99, 235, .34);
     }
 
+    .day.day-good:not(.is-today) {
+      background: #f0fdf4;
+      box-shadow: inset 0 0 0 1px rgba(22, 163, 74, .22);
+    }
+
+    .day.day-bad:not(.is-today) {
+      background: #fff1f2;
+      box-shadow: inset 0 0 0 1px rgba(225, 29, 72, .22);
+    }
+
+    .day.day-good.is-today {
+      background: linear-gradient(180deg, rgba(240, 253, 244, .86), rgba(239, 246, 255, .9));
+    }
+
+    .day.day-bad.is-today {
+      background: linear-gradient(180deg, rgba(255, 241, 242, .9), rgba(239, 246, 255, .9));
+    }
+
     .day-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 6px;
       min-height: 24px;
+    }
+
+    .day-actions {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      flex-shrink: 0;
     }
 
     .date-main {
@@ -449,6 +474,7 @@
       font-weight: 760;
     }
 
+    .day-action,
     .add-day {
       width: 26px;
       height: 26px;
@@ -462,16 +488,44 @@
       line-height: 1;
     }
 
-    .day:hover .add-day {
+    .day-action {
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .day:hover .add-day,
+    .day:hover .day-action {
       border-color: var(--line);
       background: #fff;
       color: var(--primary);
+    }
+
+    .day-action.good.active {
+      color: #15803d;
+      border-color: rgba(22, 163, 74, .28);
+      background: rgba(220, 252, 231, .95);
+    }
+
+    .day-action.bad.active {
+      color: #be123c;
+      border-color: rgba(225, 29, 72, .28);
+      background: rgba(255, 228, 230, .95);
     }
 
     .task-list {
       display: grid;
       gap: 4px;
       align-content: start;
+    }
+
+    .day-notes {
+      width: 100%;
+      margin-top: auto;
+      padding-top: 8px;
+      display: grid;
+      gap: 4px;
+      align-content: end;
+      justify-items: end;
     }
 
     .task {
@@ -531,10 +585,14 @@
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
       font-size: var(--task-font-size);
       line-height: 1.25;
       font-weight: 700;
+      word-break: break-word;
     }
 
     .task-image {
@@ -577,7 +635,7 @@
     .task.has-image .task-title {
       white-space: normal;
       display: -webkit-box;
-      -webkit-line-clamp: 2;
+      -webkit-line-clamp: 3;
       -webkit-box-orient: vertical;
     }
 
@@ -616,6 +674,78 @@
       text-overflow: ellipsis;
       white-space: nowrap;
       min-width: 0;
+    }
+
+    .day-note {
+      width: min(100%, 92%);
+      min-height: 28px;
+      border: 1px solid rgba(225, 29, 72, .22);
+      border-left: 4px solid #e11d48;
+      border-radius: 7px;
+      background: #fff1f2;
+      color: #881337;
+      padding: 4px 5px 4px 8px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 6px;
+      align-items: center;
+      cursor: grab;
+      transition: box-shadow .15s ease, transform .15s ease, opacity .15s ease;
+    }
+
+    .day-note:hover {
+      box-shadow: 0 4px 14px rgba(225, 29, 72, .1);
+    }
+
+    .day-note.dragging {
+      opacity: .45;
+      cursor: grabbing;
+    }
+
+    .day-note.done {
+      opacity: .58;
+      filter: saturate(.55);
+    }
+
+    .day-note.done .day-note-title {
+      color: var(--muted);
+      text-decoration: line-through;
+    }
+
+    .day-note-title {
+      margin: 0;
+      min-width: 0;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      font-size: 12px;
+      line-height: 1.25;
+      font-weight: 740;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .day-note-actions {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .note-drop-marker {
+      width: min(100%, 92%);
+      height: 3px;
+      border-radius: 999px;
+      background: #e11d48;
+      box-shadow: 0 0 0 3px rgba(225, 29, 72, .12);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .modal.note-mode #taskMetaRow {
+      grid-template-columns: 1fr;
     }
 
     .task-actions {
@@ -1252,12 +1382,12 @@
       <h2 id="modalTitle">新任务</h2>
       <div class="modal-grid">
         <div id="taskTitle" class="paste-zone" contenteditable="true" data-placeholder="输入任务内容，或在这里按 Ctrl+V 粘贴图片/文字"></div>
-        <div class="modal-row">
+        <div class="modal-row" id="taskMetaRow">
           <input id="taskDate" type="date" required />
           <select id="taskCategory"></select>
         </div>
         <input id="taskNote" type="text" placeholder="备注，可选" maxlength="120" />
-        <label class="template-save">
+        <label class="template-save" id="saveTemplateLabel">
           <input id="saveTemplateCheck" type="checkbox" />
           保存为模板
         </label>
@@ -1523,6 +1653,8 @@
     const STORAGE_KEY = "jijiandaiban_tasks_v1";
     const SETTINGS_KEY = "jijiandaiban_settings_v1";
     const TEMPLATES_KEY = "jijiandaiban_templates_v1";
+    const DAY_STATES_KEY = "jijiandaiban_day_states_v1";
+    const DAY_NOTES_KEY = "jijiandaiban_day_notes_v1";
     const SUPABASE_URL_KEY = "jijiandaiban_supabase_url";
     const SUPABASE_ANON_KEY_KEY = "jijiandaiban_supabase_anon_key";
     const SUPABASE_SESSION_KEY = "jijiandaiban_supabase_session";
@@ -1626,13 +1758,21 @@
     let draggingTaskId = null;
     let dropBeforeTaskId = null;
     let pointerDrag = null;
+    let notePointerDrag = null;
+    let draggingNoteId = null;
+    let dropBeforeNoteId = null;
     let suppressNextClick = false;
     let mouseDrag = null;
+    let noteMouseDrag = null;
     let pendingBlocks = [];
     let selectedDateKey = null;
+    let modalMode = "task";
+    let editingNoteId = null;
     let authMode = "login";
     let settings = loadSettings();
     let taskTemplates = loadTemplates();
+    let dayStates = loadDayStates();
+    let dayNotes = loadDayNotes();
     let lastBulkItems = [];
     let supabaseClient = null;
     let currentUser = null;
@@ -1656,6 +1796,7 @@
       taskForm: document.getElementById("taskForm"),
       modalTitle: document.getElementById("modalTitle"),
       taskTitle: document.getElementById("taskTitle"),
+      taskMetaRow: document.getElementById("taskMetaRow"),
       taskDate: document.getElementById("taskDate"),
       taskCategory: document.getElementById("taskCategory"),
       taskNote: document.getElementById("taskNote"),
@@ -1663,6 +1804,7 @@
       pasteHint: null,
       contentBlocks: document.getElementById("taskTitle"),
       saveTemplateCheck: document.getElementById("saveTemplateCheck"),
+      saveTemplateLabel: document.getElementById("saveTemplateLabel"),
       templateStrip: document.getElementById("templateStrip"),
       bulkBackdrop: document.getElementById("bulkBackdrop"),
       bulkForm: document.getElementById("bulkForm"),
@@ -1792,6 +1934,9 @@
       document.addEventListener("pointermove", handlePointerDragMove);
       document.addEventListener("pointerup", handlePointerDragEnd);
       document.addEventListener("pointercancel", handlePointerDragEnd);
+      document.addEventListener("mousedown", handleMouseDragStart);
+      document.addEventListener("mousemove", handleMouseDragMove);
+      document.addEventListener("mouseup", handleMouseDragEnd);
       document.addEventListener("click", handleDocumentClick);
       document.addEventListener("copy", handleDocumentCopy);
       window.addEventListener("scroll", throttle(updateMonthFromScroll, 80));
@@ -1851,6 +1996,8 @@
       const dayMonthKey = `${date.getFullYear()}-${date.getMonth()}`;
       const isOtherMonth = dayMonthKey !== monthKey;
       const dayTasks = isOtherMonth && settings.otherMonthMode === "hideTasks" ? [] : getVisibleTasksForDate(key);
+      const notes = isOtherMonth && settings.otherMonthMode === "hideTasks" ? [] : getVisibleNotesForDate(key);
+      const dayState = dayStates[key] || "";
       const today = isToday(date);
       const weekend = date.getDay() === 0 || date.getDay() === 6;
       const weekday = WEEKDAYS[(date.getDay() + 6) % 7];
@@ -1865,6 +2012,8 @@
         settings.weekendStyle === "tint" ? "weekend-tint" : "",
         marks.some(mark => mark.kind === "holiday") ? "has-holiday" : "",
         special ? "has-special" : "",
+        dayState === "good" ? "day-good" : "",
+        dayState === "bad" ? "day-bad" : "",
         today ? "is-today" : "",
         selectedDateKey === key ? "selected-day" : ""
       ].filter(Boolean).join(" ");
@@ -1875,15 +2024,19 @@
             <span class="date-week">${weekday}</span>
             ${today ? '<span class="today-pill">今天</span>' : ""}
           </div>
-          <button class="add-day" type="button" title="添加任务" onclick="event.stopPropagation();openModal('${key}')">+</button>
+          <div class="day-actions">
+            <button class="day-action good ${dayState === "good" ? "active" : ""}" type="button" title="标记完成日" onclick="event.stopPropagation();setDayState('${key}','good')">✓</button>
+            <button class="day-action bad ${dayState === "bad" ? "active" : ""}" type="button" title="标记异常日" onclick="event.stopPropagation();setDayState('${key}','bad')">×</button>
+            <button class="add-day" type="button" title="添加日期备注" onclick="event.stopPropagation();openNoteModal('${key}')">+</button>
+          </div>
         </div>
         ${renderDateMeta(date, marks)}
         <div class="task-list" data-date="${key}">
-          ${dayTasks.length ? dayTasks.map(renderTask).join("") : '<div class="empty-hint">双击或点 + 添加</div>'}
+          ${dayTasks.length ? dayTasks.map(renderTask).join("") : '<div class="empty-hint">双击添加任务，点 + 添加备注</div>'}
         </div>
+        ${renderDayNotes(key, notes)}
       </article>`;
     }
-
     function renderTask(task) {
       const cat = getCategory(task.category);
       const showCategory = settings.taskDisplay === "category" || settings.taskDisplay === "note";
@@ -1912,6 +2065,24 @@
       return "";
     }
 
+    function renderDayNotes(dateKey, notes = getVisibleNotesForDate(dateKey)) {
+      if (!notes.length) return `<div class="day-notes" data-date="${dateKey}"></div>`;
+      return `<div class="day-notes" data-date="${dateKey}">
+        ${notes.map(renderDayNote).join("")}
+      </div>`;
+    }
+
+    function renderDayNote(note) {
+      return `<div class="day-note ${note.done ? "done" : ""}" data-note-id="${note.id}" data-note-date="${note.date}" ondblclick="event.stopPropagation();openNoteModal('${note.date}','${note.id}')">
+        <p class="day-note-title">${escapeHtml(note.text)}</p>
+        <div class="day-note-actions">
+          <button class="mini-btn good" type="button" title="${note.done ? "取消完成" : "完成"}" onclick="event.stopPropagation();toggleDayNote('${note.id}')">${note.done ? "↩" : "✓"}</button>
+          <button class="mini-btn" type="button" title="编辑" onclick="event.stopPropagation();openNoteModal('${note.date}','${note.id}')">✎</button>
+          <button class="mini-btn bad" type="button" title="删除" onclick="event.stopPropagation();deleteDayNote('${note.id}')">×</button>
+        </div>
+      </div>`;
+    }
+
     function getVisibleTasksForDate(key) {
       const query = els.searchInput.value.trim().toLowerCase();
       const category = els.categoryFilter.value;
@@ -1922,6 +2093,16 @@
         .filter(task => status === "all" || (status === "done" ? task.done : !task.done))
         .filter(task => !query || task.title.toLowerCase().includes(query) || (task.note || "").toLowerCase().includes(query) || getTaskBlocks(task).some(block => block.type === "text" && block.text.toLowerCase().includes(query)))
         .sort(taskOrder);
+    }
+
+    function getVisibleNotesForDate(key) {
+      const query = els.searchInput.value.trim().toLowerCase();
+      const status = els.statusFilter.value;
+      return dayNotes
+        .filter(note => note.date === key)
+        .filter(note => status === "all" || (status === "done" ? note.done : !note.done))
+        .filter(note => !query || note.text.toLowerCase().includes(query))
+        .sort(noteOrder);
     }
 
     function handleDragStart(event) {
@@ -1982,6 +2163,18 @@
 
     function handlePointerDragStart(event) {
       if (!settings.dragEnabled || event.button !== 0 || event.target.closest("button, input, select, textarea, [contenteditable='true']")) return;
+      const noteEl = event.target.closest(".day-note");
+      if (noteEl) {
+        notePointerDrag = {
+          id: noteEl.dataset.noteId,
+          startX: event.clientX,
+          startY: event.clientY,
+          active: false,
+          el: noteEl,
+          pointerId: event.pointerId
+        };
+        return;
+      }
       const taskEl = event.target.closest(".task");
       if (!taskEl) return;
       pointerDrag = {
@@ -1995,6 +2188,10 @@
     }
 
     function handlePointerDragMove(event) {
+      if (notePointerDrag && notePointerDrag.pointerId === event.pointerId) {
+        handleNotePointerDragMove(event);
+        return;
+      }
       if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
       const distance = Math.hypot(event.clientX - pointerDrag.startX, event.clientY - pointerDrag.startY);
       if (!pointerDrag.active && distance < 8) return;
@@ -2010,6 +2207,10 @@
     }
 
     function handlePointerDragEnd(event) {
+      if (notePointerDrag && notePointerDrag.pointerId === event.pointerId) {
+        handleNotePointerDragEnd(event);
+        return;
+      }
       if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
       const drag = pointerDrag;
       pointerDrag = null;
@@ -2046,9 +2247,92 @@
       placeDropMarker(day, position.beforeId);
     }
 
+    function handleNotePointerDragMove(event) {
+      const distance = Math.hypot(event.clientX - notePointerDrag.startX, event.clientY - notePointerDrag.startY);
+      if (!notePointerDrag.active && distance < 8) return;
+      event.preventDefault();
+      if (!notePointerDrag.active) {
+        notePointerDrag.active = true;
+        draggingNoteId = notePointerDrag.id;
+        notePointerDrag.el.classList.add("dragging");
+        document.body.classList.add("dragging-task");
+        notePointerDrag.el.setPointerCapture?.(event.pointerId);
+      }
+      updateNoteDropTarget(event.clientX, event.clientY);
+    }
+
+    function handleNotePointerDragEnd(event) {
+      const drag = notePointerDrag;
+      notePointerDrag = null;
+      drag.el.releasePointerCapture?.(event.pointerId);
+      if (drag.active) {
+        suppressNextClick = true;
+        const day = document.elementFromPoint(event.clientX, event.clientY)?.closest(".day");
+        if (day) {
+          const position = getNoteDropPosition(day, event.clientY);
+          moveNoteToDate(drag.id, day.dataset.date, position.beforeId);
+        }
+      }
+      drag.el.classList.remove("dragging");
+      document.body.classList.remove("dragging-task");
+      document.querySelectorAll(".day.drag-over").forEach(el => el.classList.remove("drag-over"));
+      document.querySelectorAll(".note-drop-marker").forEach(el => el.remove());
+      draggingNoteId = null;
+      dropBeforeNoteId = null;
+    }
+
+    function updateNoteDropTarget(clientX, clientY) {
+      const day = document.elementFromPoint(clientX, clientY)?.closest(".day");
+      document.querySelectorAll(".day.drag-over").forEach(el => {
+        if (el !== day) el.classList.remove("drag-over");
+      });
+      if (!day) {
+        document.querySelectorAll(".note-drop-marker").forEach(el => el.remove());
+        dropBeforeNoteId = null;
+        return;
+      }
+      day.classList.add("drag-over");
+      const position = getNoteDropPosition(day, clientY);
+      dropBeforeNoteId = position.beforeId;
+      placeNoteDropMarker(day, position.beforeId);
+    }
+
+    function getNoteDropPosition(day, clientY) {
+      const noteEls = [...day.querySelectorAll(".day-note:not(.dragging)")];
+      for (const el of noteEls) {
+        const rect = el.getBoundingClientRect();
+        if (clientY < rect.top + rect.height / 2) {
+          return { beforeId: el.dataset.noteId };
+        }
+      }
+      return { beforeId: null };
+    }
+
+    function placeNoteDropMarker(day, beforeId) {
+      document.querySelectorAll(".note-drop-marker").forEach(el => el.remove());
+      const list = day.querySelector(".day-notes");
+      if (!list) return;
+      const marker = document.createElement("div");
+      marker.className = "note-drop-marker";
+      const beforeEl = beforeId ? list.querySelector(`.day-note[data-note-id="${beforeId}"]`) : null;
+      list.insertBefore(marker, beforeEl || null);
+    }
+
     function handleMouseDragStart(event) {
+      if (pointerDrag || notePointerDrag) return;
       if (!settings.dragEnabled) return;
-      if (event.button !== 0 || event.target.closest("button")) return;
+      if (event.button !== 0 || event.target.closest("button, input, select, textarea, [contenteditable='true']")) return;
+      const noteEl = event.target.closest(".day-note");
+      if (noteEl) {
+        noteMouseDrag = {
+          id: noteEl.dataset.noteId,
+          startX: event.clientX,
+          startY: event.clientY,
+          active: false,
+          el: noteEl
+        };
+        return;
+      }
       const taskEl = event.target.closest(".task");
       if (!taskEl) return;
       mouseDrag = {
@@ -2061,9 +2345,20 @@
     }
 
     function handleMouseDragMove(event) {
+      if (noteMouseDrag) {
+        const distance = Math.hypot(event.clientX - noteMouseDrag.startX, event.clientY - noteMouseDrag.startY);
+        if (!noteMouseDrag.active && distance < 8) return;
+        event.preventDefault();
+        noteMouseDrag.active = true;
+        noteMouseDrag.el.classList.add("dragging");
+        document.body.classList.add("dragging-task");
+        updateNoteDropTarget(event.clientX, event.clientY);
+        return;
+      }
       if (!mouseDrag) return;
       const distance = Math.hypot(event.clientX - mouseDrag.startX, event.clientY - mouseDrag.startY);
       if (!mouseDrag.active && distance < 8) return;
+      event.preventDefault();
       mouseDrag.active = true;
       mouseDrag.el.classList.add("dragging");
       document.body.classList.add("dragging-task");
@@ -2080,6 +2375,24 @@
     }
 
     function handleMouseDragEnd(event) {
+      if (noteMouseDrag) {
+        const drag = noteMouseDrag;
+        noteMouseDrag = null;
+        drag.el.classList.remove("dragging");
+        document.body.classList.remove("dragging-task");
+        document.querySelectorAll(".day.drag-over").forEach(el => el.classList.remove("drag-over"));
+        document.querySelectorAll(".note-drop-marker").forEach(el => el.remove());
+        if (!drag.active) return;
+        suppressNextClick = true;
+        const day = document.elementFromPoint(event.clientX, event.clientY)?.closest(".day");
+        if (day) {
+          const position = getNoteDropPosition(day, event.clientY);
+          moveNoteToDate(drag.id, day.dataset.date, position.beforeId);
+        }
+        draggingNoteId = null;
+        dropBeforeNoteId = null;
+        return;
+      }
       if (!mouseDrag) return;
       const drag = mouseDrag;
       mouseDrag = null;
@@ -2088,6 +2401,7 @@
       document.querySelectorAll(".day.drag-over").forEach(el => el.classList.remove("drag-over"));
       document.querySelectorAll(".drop-marker").forEach(el => el.remove());
       if (!drag.active) return;
+      suppressNextClick = true;
       const day = document.elementFromPoint(event.clientX, event.clientY)?.closest(".day");
       if (day) {
         const position = getDropPosition(day, event.clientY);
@@ -2129,6 +2443,19 @@
       return true;
     }
 
+    function moveNoteToDate(noteId, targetDate, beforeId = null) {
+      const note = dayNotes.find(item => item.id === noteId);
+      if (!note || !targetDate) return false;
+      const oldDate = note.date;
+      note.date = targetDate;
+      reorderDateNotes(targetDate, noteId, beforeId);
+      if (oldDate !== targetDate) reorderDateNotes(oldDate);
+      persistDayData();
+      renderVisibleWeeks();
+      showToast(oldDate === targetDate ? "备注顺序已调整" : `备注已移动到 ${targetDate.slice(5)}`);
+      return true;
+    }
+
     function reorderDateTasks(dateKey, movedId = null, beforeId = null) {
       const ordered = tasks
         .filter(item => item.date === dateKey && item.id !== movedId)
@@ -2143,13 +2470,39 @@
       });
     }
 
+    function reorderDateNotes(dateKey, movedId = null, beforeId = null) {
+      const ordered = dayNotes
+        .filter(item => item.date === dateKey && item.id !== movedId)
+        .sort(noteOrder);
+      const moved = movedId ? dayNotes.find(item => item.id === movedId) : null;
+      if (moved && moved.date === dateKey) {
+        const targetIndex = beforeId ? ordered.findIndex(item => item.id === beforeId) : -1;
+        ordered.splice(targetIndex >= 0 ? targetIndex : ordered.length, 0, moved);
+      }
+      ordered.forEach((item, index) => {
+        item.sortIndex = index;
+      });
+    }
+
+    function setDayState(dateKey, state) {
+      if (!isDateKey(dateKey)) return;
+      if (dayStates[dateKey] === state) {
+        delete dayStates[dateKey];
+      } else {
+        dayStates[dateKey] = state;
+      }
+      persistDayData();
+      renderVisibleWeeks();
+      showToast(dayStates[dateKey] === "good" ? "已标记为淡绿色" : dayStates[dateKey] === "bad" ? "已标记为淡红色" : "已取消日期标记");
+    }
+
     function handleDocumentClick(event) {
       if (suppressNextClick) {
         suppressNextClick = false;
         event.preventDefault();
         return;
       }
-      if (event.target.closest(".modal, button, input, select, textarea, .task")) return;
+      if (event.target.closest(".modal, button, input, select, textarea, .task, .day-note")) return;
       const day = event.target.closest(".day");
       if (!day) return;
       selectDate(day.dataset.date);
@@ -2165,28 +2518,25 @@
     function handleDocumentCopy(event) {
       if (!selectedDateKey) return;
       if (document.activeElement && ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
-      const rows = getTasksForDate(selectedDateKey);
+      const rows = getCopyRowsForDate(selectedDateKey);
       if (!rows.length) {
-        showToast("当天没有可复制的事项");
+        showToast("当天没有可复制的用户内容");
         return;
       }
       const text = buildDateCopyText(selectedDateKey, rows);
       event.clipboardData.setData("text/plain", text);
       event.clipboardData.setData("text/html", buildDateCopyHtml(selectedDateKey, rows));
       event.preventDefault();
-      showToast(`已复制 ${rows.length} 条事项`);
+      showToast(`已复制 ${rows.length} 条用户内容`);
     }
 
     function buildDateCopyText(dateKey, rows) {
-      const lines = [`${dateKey.replace(/-/g, "/")} 事项`, ""];
-      rows.forEach((task, index) => {
-        const cat = getCategory(task.category);
-        lines.push(`${index + 1}. ${cat.name}｜${task.title}${task.done ? "（已完成）" : ""}`);
-        if (task.note) lines.push(`备注：${task.note}`);
-        getTaskBlocks(task).forEach(block => {
-          if (block.type === "text") lines.push(block.text);
-          if (block.type === "image") lines.push("[图片]");
-        });
+      const lines = [];
+      rows.forEach((row, index) => {
+        const parts = getUserTextParts(row);
+        if (!parts.length) return;
+        lines.push(`${index + 1}. ${parts.shift()}`);
+        parts.forEach(part => lines.push(part));
         lines.push("");
       });
       return lines.join("\n").trim();
@@ -2196,13 +2546,27 @@
       return tasks.filter(task => task.date === dateKey).sort(taskOrder);
     }
 
+    function getNotesForDate(dateKey) {
+      return dayNotes.filter(note => note.date === dateKey).sort(noteOrder);
+    }
+
+    function getCopyRowsForDate(dateKey) {
+      return [
+        ...getTasksForDate(dateKey).map(item => ({ type: "task", item })),
+        ...getNotesForDate(dateKey).map(item => ({ type: "note", item }))
+      ].filter(row => getUserTextParts(row).length || getUserImageBlocks(row).length);
+    }
+
     function buildDateCopyHtml(dateKey, rows) {
-      const parts = [`<h3>${escapeHtml(dateKey.replace(/-/g, "/"))} 事项</h3>`, "<ol>"];
-      rows.forEach(task => {
-        const cat = getCategory(task.category);
-        parts.push(`<li><strong>${escapeHtml(cat.name)}｜${escapeHtml(task.title)}</strong>${task.done ? "（已完成）" : ""}`);
-        if (task.note) parts.push(`<div>备注：${escapeHtml(task.note)}</div>`);
-        getTaskBlocks(task).forEach(block => {
+      const parts = ["<ol>"];
+      rows.forEach(row => {
+        const textParts = getUserTextParts(row);
+        const imageBlocks = getUserImageBlocks(row);
+        parts.push("<li>");
+        textParts.forEach((text, index) => {
+          parts.push(index === 0 ? `<strong>${escapeHtml(text)}</strong>` : `<p>${escapeHtml(text).replace(/\n/g, "<br>")}</p>`);
+        });
+        imageBlocks.forEach(block => {
           if (block.type === "text") parts.push(`<p>${escapeHtml(block.text).replace(/\n/g, "<br>")}</p>`);
           if (block.type === "image") parts.push(`<div><img src="${escapeAttr(block.src)}" style="max-width:420px;height:auto;" /></div>`);
         });
@@ -2210,6 +2574,22 @@
       });
       parts.push("</ol>");
       return parts.join("");
+    }
+
+    function getUserTextParts(row) {
+      if (row.type === "note") return [row.item.text].filter(Boolean);
+      const task = row.item;
+      const textBlocks = getTaskBlocks(task).filter(block => block.type === "text").map(block => block.text).filter(Boolean);
+      const hasImages = getTaskBlocks(task).some(block => block.type === "image");
+      const fallbackTitle = hasImages && task.title === "图片事项" ? "" : task.title;
+      const parts = textBlocks.length ? [...textBlocks] : [fallbackTitle].filter(Boolean);
+      if (task.note) parts.push(task.note);
+      return parts;
+    }
+
+    function getUserImageBlocks(row) {
+      if (row.type !== "task") return [];
+      return getTaskBlocks(row.item).filter(block => block.type === "image");
     }
 
     function setupInfiniteScroll() {
@@ -2335,7 +2715,9 @@
     }
 
     function openModal(dateKey, id) {
+      setModalMode("task");
       editingId = id || null;
+      editingNoteId = null;
       const task = tasks.find(item => item.id === editingId);
       els.modalTitle.textContent = task ? "编辑任务" : "新任务";
       els.taskDate.value = task ? task.date : dateKey || toKey(new Date());
@@ -2350,9 +2732,40 @@
       setTimeout(() => els.taskTitle.focus(), 0);
     }
 
+    function openNoteModal(dateKey, id) {
+      setModalMode("note");
+      editingId = null;
+      editingNoteId = id || null;
+      const note = dayNotes.find(item => item.id === editingNoteId);
+      els.modalTitle.textContent = note ? "编辑日期备注" : "新增日期备注";
+      els.taskDate.value = note ? note.date : dateKey || toKey(new Date());
+      els.taskCategory.value = settings.defaultCategory;
+      els.taskNote.value = "";
+      pendingBlocks = note ? [{ type: "text", text: note.text }] : [];
+      renderContentBlocks();
+      els.saveTemplateCheck.checked = false;
+      showBackdrop(els.modalBackdrop);
+      setTimeout(() => els.taskTitle.focus(), 0);
+    }
+
+    function setModalMode(mode) {
+      modalMode = mode === "note" ? "note" : "task";
+      const noteMode = modalMode === "note";
+      els.taskForm?.classList.toggle("note-mode", noteMode);
+      els.taskMetaRow?.classList.toggle("hidden", false);
+      els.taskCategory?.classList.toggle("hidden", noteMode);
+      els.taskNote?.classList.toggle("hidden", noteMode);
+      els.saveTemplateLabel?.classList.toggle("hidden", noteMode);
+      els.templateStrip?.classList.toggle("hidden", noteMode);
+      document.getElementById("openBulkBtn")?.classList.toggle("hidden", noteMode);
+    }
+
     function closeModal() {
       hideBackdrop(els.modalBackdrop);
       editingId = null;
+      editingNoteId = null;
+      modalMode = "task";
+      els.taskForm?.classList.remove("note-mode");
       pendingBlocks = [];
       els.taskForm.reset();
       renderContentBlocks();
@@ -2478,6 +2891,10 @@
     function saveModalTask(event) {
       event.preventDefault();
       pendingBlocks = readEditorBlocks();
+      if (modalMode === "note") {
+        saveDayNoteFromModal();
+        return;
+      }
       const payload = {
         title: deriveTitleFromBlocks(pendingBlocks),
         date: els.taskDate.value,
@@ -2502,6 +2919,29 @@
       ensureDateRendered(parseKey(payload.date));
     }
 
+    function saveDayNoteFromModal() {
+      const text = pendingBlocks
+        .filter(block => block.type === "text")
+        .map(block => block.text)
+        .join("\n")
+        .trim();
+      const date = els.taskDate.value;
+      if (!text) return showToast("请输入日期备注");
+      if (!isDateKey(date)) return showToast("请选择备注日期");
+      if (editingNoteId) {
+        dayNotes = dayNotes.map(note => note.id === editingNoteId ? { ...note, text, date } : note);
+        reorderDateNotes(date);
+        showToast("备注已保存");
+      } else {
+        dayNotes.push({ id: createId(), date, text, done: false, createdAt: Date.now(), sortIndex: nextNoteSortIndex(date) });
+        showToast("备注已添加");
+      }
+      persistDayData();
+      closeModal();
+      renderVisibleWeeks();
+      ensureDateRendered(parseKey(date));
+    }
+
     function ensureDateRendered(date) {
       if (!document.querySelector(`.day[data-date="${toKey(date)}"]`)) {
         renderAround(date);
@@ -2514,6 +2954,12 @@
       renderVisibleWeeks();
     }
 
+    function toggleDayNote(id) {
+      dayNotes = dayNotes.map(note => note.id === id ? { ...note, done: !note.done } : note);
+      persistDayData();
+      renderVisibleWeeks();
+    }
+
     function deleteTask(id) {
       const task = tasks.find(item => item.id === id);
       if (!task) return;
@@ -2523,6 +2969,17 @@
       persist();
       renderVisibleWeeks();
       showToast("已删除");
+    }
+
+    function deleteDayNote(id) {
+      const note = dayNotes.find(item => item.id === id);
+      if (!note) return;
+      if (!confirm(`删除备注「${note.text.slice(0, 24)}」？`)) return;
+      dayNotes = dayNotes.filter(item => item.id !== id);
+      reorderDateNotes(note.date);
+      persistDayData();
+      renderVisibleWeeks();
+      showToast("备注已删除");
     }
 
     async function handleTaskPaste(event) {
@@ -2847,7 +3304,7 @@
     }
 
     function exportData() {
-      const payload = { tasks, settings, templates: taskTemplates, exportedAt: new Date().toISOString(), app: "极简待办" };
+      const payload = { tasks, settings, templates: taskTemplates, dayStates, dayNotes, exportedAt: new Date().toISOString(), app: "极简待办" };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -2871,8 +3328,11 @@
           tasks = [...normalizeTasks(incoming).filter(task => !existing.has(task.id)), ...tasks];
           if (data.templates) taskTemplates = normalizeTemplates([...data.templates, ...taskTemplates]);
           if (data.settings) settings = normalizeSettings({ ...settings, ...data.settings });
+          if (data.dayStates) dayStates = { ...dayStates, ...normalizeDayStates(data.dayStates) };
+          if (data.dayNotes) dayNotes = normalizeDayNotes([...data.dayNotes, ...dayNotes]);
           persist();
           persistTemplates();
+          persistDayData();
           localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
           queueCloudSave();
           applySettings();
@@ -3069,7 +3529,10 @@
         const data = Array.isArray(rows) ? rows[0] : rows;
         if (data) {
           tasks = normalizeTasks(data.tasks || []);
-          settings = normalizeSettings({ ...DEFAULT_SETTINGS, ...(data.settings || {}) });
+          const cloudSettings = data.settings || {};
+          settings = normalizeSettings({ ...DEFAULT_SETTINGS, ...cloudSettings });
+          dayStates = normalizeDayStates(cloudSettings.dayStates || {});
+          dayNotes = normalizeDayNotes(cloudSettings.dayNotes || []);
           taskTemplates = normalizeTemplates(data.templates || []);
           saveLocalSnapshot();
           applySettings();
@@ -3103,7 +3566,7 @@
       const payload = {
         user_id: currentUser.id,
         tasks,
-        settings,
+        settings: { ...settings, dayStates, dayNotes },
         templates: taskTemplates,
         updated_at: new Date().toISOString()
       };
@@ -3210,6 +3673,8 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
       localStorage.setItem(TEMPLATES_KEY, JSON.stringify(taskTemplates));
+      localStorage.setItem(DAY_STATES_KEY, JSON.stringify(dayStates));
+      localStorage.setItem(DAY_NOTES_KEY, JSON.stringify(dayNotes));
     }
 
     function updateCloudUi() {
@@ -3258,6 +3723,43 @@
       } catch {
         return [];
       }
+    }
+
+    function loadDayStates() {
+      try {
+        const raw = localStorage.getItem(DAY_STATES_KEY);
+        return raw ? normalizeDayStates(JSON.parse(raw)) : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function loadDayNotes() {
+      try {
+        const raw = localStorage.getItem(DAY_NOTES_KEY);
+        return raw ? normalizeDayNotes(JSON.parse(raw)) : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function normalizeDayStates(value) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+      return Object.fromEntries(Object.entries(value).filter(([key, state]) => isDateKey(key) && ["good", "bad"].includes(state)));
+    }
+
+    function normalizeDayNotes(rows) {
+      if (!Array.isArray(rows)) return [];
+      return rows
+        .filter(row => row && isDateKey(row.date) && String(row.text || "").trim())
+        .map(row => ({
+          id: row.id || createId(),
+          date: row.date,
+          text: String(row.text || "").trim().slice(0, 1000),
+          done: Boolean(row.done),
+          createdAt: Number(row.createdAt) || Date.now(),
+          sortIndex: Number.isFinite(Number(row.sortIndex)) ? Number(row.sortIndex) : Number(row.createdAt) || Date.now()
+        }));
     }
 
     function normalizeTemplates(rows) {
@@ -3525,9 +4027,19 @@
         || (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0);
     }
 
+    function noteOrder(a, b) {
+      return (Number(a.sortIndex) || Number(a.createdAt) || 0) - (Number(b.sortIndex) || Number(b.createdAt) || 0)
+        || (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0);
+    }
+
     function nextSortIndex(dateKey) {
       const sameDay = tasks.filter(task => task.date === dateKey);
       return sameDay.length ? Math.max(...sameDay.map(task => Number(task.sortIndex) || Number(task.createdAt) || 0)) + 1 : 0;
+    }
+
+    function nextNoteSortIndex(dateKey) {
+      const sameDay = dayNotes.filter(note => note.date === dateKey);
+      return sameDay.length ? Math.max(...sameDay.map(note => Number(note.sortIndex) || Number(note.createdAt) || 0)) + 1 : 0;
     }
 
     function persist() {
@@ -3537,6 +4049,12 @@
 
     function persistTemplates() {
       localStorage.setItem(TEMPLATES_KEY, JSON.stringify(taskTemplates));
+      queueCloudSave();
+    }
+
+    function persistDayData() {
+      localStorage.setItem(DAY_STATES_KEY, JSON.stringify(dayStates));
+      localStorage.setItem(DAY_NOTES_KEY, JSON.stringify(dayNotes));
       queueCloudSave();
     }
 
