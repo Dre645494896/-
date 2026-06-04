@@ -588,6 +588,23 @@
       box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
     }
 
+    .drag-preview.copy-mode {
+      box-shadow: 0 12px 26px rgba(37, 99, 235, .22), 0 0 0 2px rgba(37, 99, 235, .28);
+    }
+
+    .drag-preview.copy-mode::after {
+      content: "复制";
+      position: absolute;
+      right: 6px;
+      top: 6px;
+      border-radius: 999px;
+      background: var(--primary);
+      color: #fff;
+      padding: 2px 6px;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
     body.dragging-task {
       user-select: none;
       cursor: grabbing;
@@ -913,7 +930,7 @@
 
     .modal-row {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 92px;
       gap: 10px;
     }
 
@@ -1163,6 +1180,15 @@
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .progress-tag {
+      border-radius: 5px;
+      padding: 1px 5px;
+      background: #ecfdf5;
+      color: #047857;
+      font-weight: 800;
       white-space: nowrap;
     }
 
@@ -1462,6 +1488,7 @@
         <div class="modal-row" id="taskMetaRow">
           <input id="taskDate" type="date" required />
           <select id="taskCategory"></select>
+          <input id="taskProgress" type="number" min="1" max="100" step="1" placeholder="进度 %" />
         </div>
         <input id="taskNote" type="text" placeholder="备注，可选" maxlength="120" />
         <label class="template-save" id="saveTemplateLabel">
@@ -1876,6 +1903,7 @@
       taskMetaRow: document.getElementById("taskMetaRow"),
       taskDate: document.getElementById("taskDate"),
       taskCategory: document.getElementById("taskCategory"),
+      taskProgress: document.getElementById("taskProgress"),
       taskNote: document.getElementById("taskNote"),
       pasteZone: document.getElementById("taskTitle"),
       pasteHint: null,
@@ -2117,11 +2145,13 @@
       const blocks = getTaskBlocks(task);
       const visibleBlocks = blocks.filter(block => block.type === "image").slice(0, 3);
       const hasImage = blocks.some(block => block.type === "image");
+      const progress = normalizeProgress(task.progress);
       return `<div class="task ${task.done ? "done" : ""} ${hasImage ? "has-image" : ""}" draggable="false" data-task-id="${task.id}" data-task-date="${task.date}" style="--cat-color:${cat.color};--cat-bg:${cat.bg}" ondblclick="event.stopPropagation();openModal('${task.date}','${task.id}')">
         <div class="task-main">
           ${visibleBlocks.length ? `<div class="task-content">${visibleBlocks.map(renderTaskBlock).join("")}</div>` : ""}
           <p class="task-title">${escapeHtml(task.title)}</p>
           ${showCategory ? `<span class="tag">${escapeHtml(cat.name)}</span>` : ""}
+          ${progress ? `<span class="progress-tag">进度 ${progress}%</span>` : ""}
           ${showNote ? `<span class="note">${escapeHtml(task.note)}</span>` : ""}
         </div>
         <div class="task-actions">
@@ -2222,6 +2252,7 @@
         x: event.clientX,
         y: event.clientY,
         active: false,
+        copyMode: event.altKey,
         el,
         preview: null,
         targetDate: null,
@@ -2238,6 +2269,8 @@
       if (!activeDrag.active) activateUnifiedDrag(event);
       activeDrag.x = event.clientX;
       activeDrag.y = event.clientY;
+      activeDrag.copyMode = event.altKey;
+      activeDrag.preview?.classList.toggle("copy-mode", activeDrag.copyMode);
       moveDragPreview(event.clientX, event.clientY);
       updateUnifiedDropTarget(event.clientX, event.clientY);
     }
@@ -2255,6 +2288,7 @@
       if (!activeDrag || activeDrag.source !== source) return;
       if (source === "pointer" && activeDrag.pointerId !== event.pointerId) return;
       const drag = activeDrag;
+      drag.copyMode = event.altKey || drag.copyMode;
       drag.el.releasePointerCapture?.(event.pointerId);
       if (drag.active) {
         suppressNextClick = true;
@@ -2262,8 +2296,10 @@
         const targetDate = day?.dataset.date || drag.targetDate;
         if (targetDate) {
           const position = day ? getUnifiedDropPosition(day, drag.type, event.clientY) : { beforeId: drag.beforeId };
-          if (drag.type === "task") moveTaskToDate(drag.id, targetDate, position.beforeId);
-          if (drag.type === "note") moveNoteToDate(drag.id, targetDate, position.beforeId);
+          if (drag.copyMode && drag.type === "task") copyTaskToDate(drag.id, targetDate, position.beforeId);
+          if (drag.copyMode && drag.type === "note") copyNoteToDate(drag.id, targetDate, position.beforeId);
+          if (!drag.copyMode && drag.type === "task") moveTaskToDate(drag.id, targetDate, position.beforeId);
+          if (!drag.copyMode && drag.type === "note") moveNoteToDate(drag.id, targetDate, position.beforeId);
         }
       }
       activeDrag = null;
@@ -2274,6 +2310,7 @@
       const rect = el.getBoundingClientRect();
       const preview = el.cloneNode(true);
       preview.classList.add("drag-preview");
+      preview.classList.toggle("copy-mode", activeDrag.copyMode);
       preview.classList.remove("dragging");
       preview.style.width = `${rect.width}px`;
       preview.style.height = `${rect.height}px`;
@@ -2427,6 +2464,48 @@
       return true;
     }
 
+    function copyTaskToDate(taskId, targetDate, beforeId = null) {
+      const task = tasks.find(item => item.id === taskId);
+      if (!task || !targetDate) return false;
+      const copy = {
+        ...task,
+        id: createId(),
+        date: targetDate,
+        done: false,
+        createdAt: Date.now(),
+        sortIndex: nextSortIndex(targetDate),
+        contentBlocks: getTaskBlocks(task).map(block => ({ ...block, createdAt: Number(block.createdAt) || Date.now() }))
+      };
+      const progress = normalizeProgress(task.progress);
+      if (progress) copy.progress = progress;
+      else delete copy.progress;
+      tasks.push(copy);
+      reorderDateTasks(targetDate, copy.id, beforeId);
+      persist();
+      renderVisibleWeeks();
+      showToast(`已复制到 ${targetDate.slice(5)}`);
+      return true;
+    }
+
+    function copyNoteToDate(noteId, targetDate, beforeId = null) {
+      const note = dayNotes.find(item => item.id === noteId);
+      if (!note || !targetDate) return false;
+      const copy = {
+        ...note,
+        id: createId(),
+        date: targetDate,
+        done: false,
+        createdAt: Date.now(),
+        sortIndex: nextNoteSortIndex(targetDate)
+      };
+      dayNotes.push(copy);
+      reorderDateNotes(targetDate, copy.id, beforeId);
+      persistDayData();
+      renderVisibleWeeks();
+      showToast(`已复制到 ${targetDate.slice(5)}`);
+      return true;
+    }
+
     function reorderDateTasks(dateKey, movedId = null, beforeId = null) {
       const ordered = tasks
         .filter(item => item.date === dateKey && item.id !== movedId)
@@ -2556,6 +2635,8 @@
       const fallbackTitle = hasImages && task.title === "图片事项" ? "" : task.title;
       const parts = textBlocks.length ? [...textBlocks] : [fallbackTitle].filter(Boolean);
       if (task.note) parts.push(task.note);
+      const progress = normalizeProgress(task.progress);
+      if (progress) parts.push(`${progress}%`);
       return parts;
     }
 
@@ -2694,6 +2775,7 @@
       els.modalTitle.textContent = task ? "编辑任务" : "新任务";
       els.taskDate.value = task ? task.date : dateKey || toKey(new Date());
       els.taskCategory.value = task ? task.category : settings.defaultCategory;
+      els.taskProgress.value = task && normalizeProgress(task.progress) ? normalizeProgress(task.progress) : "";
       els.taskNote.value = task ? task.note || "" : "";
       pendingBlocks = task ? getTaskBlocks(task).map(block => ({ ...block })) : [];
       if (task && !pendingBlocks.length && task.title) pendingBlocks = [{ type: "text", text: task.title }];
@@ -2712,6 +2794,7 @@
       els.modalTitle.textContent = note ? "编辑日期备注" : "新增日期备注";
       els.taskDate.value = note ? note.date : dateKey || toKey(new Date());
       els.taskCategory.value = settings.defaultCategory;
+      els.taskProgress.value = "";
       els.taskNote.value = "";
       pendingBlocks = note ? [{ type: "text", text: note.text }] : [];
       renderContentBlocks();
@@ -2726,6 +2809,7 @@
       els.taskForm?.classList.toggle("note-mode", noteMode);
       els.taskMetaRow?.classList.toggle("hidden", false);
       els.taskCategory?.classList.toggle("hidden", noteMode);
+      els.taskProgress?.classList.toggle("hidden", noteMode);
       els.taskNote?.classList.toggle("hidden", noteMode);
       els.saveTemplateLabel?.classList.toggle("hidden", noteMode);
       els.templateStrip?.classList.toggle("hidden", noteMode);
@@ -2868,12 +2952,15 @@
         saveDayNoteFromModal();
         return;
       }
+      const progress = normalizeProgress(els.taskProgress.value);
+      if (els.taskProgress.value.trim() && !progress) return showToast("进度请输入 1-100 的整数");
       const payload = {
         title: deriveTitleFromBlocks(pendingBlocks),
         date: els.taskDate.value,
         category: els.taskCategory.value,
         note: els.taskNote.value.trim(),
-        contentBlocks: normalizeContentBlocks(pendingBlocks)
+        contentBlocks: normalizeContentBlocks(pendingBlocks),
+        progress
       };
       if (!payload.title && payload.contentBlocks.length) payload.title = deriveTitleFromBlocks(payload.contentBlocks);
       if (!payload.title) return showToast("请输入任务标题或粘贴内容");
@@ -3111,9 +3198,12 @@
     function saveTemplate(payload) {
       const title = payload.title.trim();
       if (!title) return;
-      const exists = taskTemplates.some(t => t.title === title && t.category === payload.category && (t.note || "") === (payload.note || ""));
+      const progress = normalizeProgress(payload.progress);
+      const exists = taskTemplates.some(t => t.title === title && t.category === payload.category && (t.note || "") === (payload.note || "") && normalizeProgress(t.progress) === progress);
       if (exists) return;
-      taskTemplates.unshift({ id: createId(), title, category: payload.category, note: payload.note || "", createdAt: Date.now() });
+      const template = { id: createId(), title, category: payload.category, note: payload.note || "", createdAt: Date.now() };
+      if (progress) template.progress = progress;
+      taskTemplates.unshift(template);
       taskTemplates = taskTemplates.slice(0, 24);
       persistTemplates();
     }
@@ -3137,6 +3227,7 @@
       pendingBlocks = normalizeContentBlocks([{ type: "text", text: t.title }]);
       renderContentBlocks();
       els.taskCategory.value = t.category;
+      els.taskProgress.value = normalizeProgress(t.progress) || "";
       els.taskNote.value = t.note || "";
       showToast("已填入模板");
     }
@@ -3145,7 +3236,10 @@
       const t = taskTemplates.find(item => item.id === id);
       if (!t) return;
       const targetDate = dateKey || els.taskDate.value || toKey(new Date());
-      tasks.push({ id: createId(), title: t.title, date: targetDate, category: t.category, note: t.note || "", done: false, createdAt: Date.now(), sortIndex: nextSortIndex(targetDate) });
+      const task = { id: createId(), title: t.title, date: targetDate, category: t.category, note: t.note || "", done: false, createdAt: Date.now(), sortIndex: nextSortIndex(targetDate) };
+      const progress = normalizeProgress(t.progress);
+      if (progress) task.progress = progress;
+      tasks.push(task);
       persist();
       renderVisibleWeeks();
       showToast("已添加模板任务");
@@ -3158,9 +3252,10 @@
       }
       els.templateSettingsList.innerHTML = `<div class="special-list">${taskTemplates.map(t => {
         const cat = getCategory(t.category);
+        const progress = normalizeProgress(t.progress);
         return `<div class="special-item">
           <span class="special-dot" style="--special-color:${cat.color}"></span>
-          <span>${escapeHtml(t.title)} · ${escapeHtml(cat.name)}</span>
+          <span>${escapeHtml(t.title)} · ${escapeHtml(cat.name)}${progress ? ` · ${progress}%` : ""}</span>
           <button class="mini-btn bad" type="button" onclick="deleteTemplate('${t.id}')">×</button>
         </div>`;
       }).join("")}</div>`;
@@ -3744,6 +3839,7 @@
           title: String(row.title || row.text || "").trim(),
           category: CATEGORIES.some(cat => cat.id === row.category) ? row.category : "work",
           note: String(row.note || ""),
+          progress: normalizeProgress(row.progress),
           createdAt: Number(row.createdAt) || Date.now()
         }))
         .filter(row => row.title);
@@ -3970,13 +4066,13 @@
         if (matchesSpecialDate(item, date, lunar)) marks.push({ kind: "special", name: item.name, color: item.color });
       }
       const solarFestival = SOLAR_FESTIVALS[monthDay];
-      if (solarFestival && !marks.some(mark => mark.name === solarFestival)) marks.push({ kind: "festival", name: solarFestival });
+      if (solarFestival && !hasEquivalentMark(marks, solarFestival)) marks.push({ kind: "festival", name: solarFestival });
       if (lunar) {
         const lunarFestival = LUNAR_FESTIVALS[`${lunar.month}-${lunar.day}`];
-        if (lunarFestival && !marks.some(mark => mark.name === lunarFestival)) marks.push({ kind: "festival", name: lunarFestival });
+        if (lunarFestival && !hasEquivalentMark(marks, lunarFestival)) marks.push({ kind: "festival", name: lunarFestival });
       }
       const term = settings.solarTermEnabled ? getSolarTerm(date) : "";
-      if (term && !marks.some(mark => mark.name === term)) marks.push({ kind: "term", name: term });
+      if (term && !hasEquivalentMark(marks, term)) marks.push({ kind: "term", name: term });
       return marks;
     }
 
@@ -4045,10 +4141,22 @@
         const detail = chineseDays.getDayDetail(toKey(date));
         const name = normalizeHolidayName(detail?.name);
         if (!name) return null;
-        return { type: detail.work ? "workday" : "holiday", name };
+        return { type: detail.work ? "workday" : "holiday", name: detail.work ? "调休" : name };
       } catch {
         return null;
       }
+    }
+
+    function hasEquivalentMark(marks, name) {
+      const key = normalizeFestivalKey(name);
+      return marks.some(mark => normalizeFestivalKey(mark.name) === key);
+    }
+
+    function normalizeFestivalKey(name) {
+      return String(name || "")
+        .replace(/[节日]/g, "")
+        .replace(/劳动/g, "五一")
+        .trim();
     }
 
     function normalizeHolidayName(name) {
@@ -4082,6 +4190,7 @@
             date: isDateKey(row.date) ? row.date : toKey(new Date()),
             category: CATEGORIES.some(cat => cat.id === row.category) ? row.category : (CATEGORIES.some(cat => cat.id === row.cat) ? row.cat : "work"),
             note: String(row.note || ""),
+            progress: normalizeProgress(row.progress),
             done: Boolean(row.done),
             contentBlocks,
             sortIndex: Number.isFinite(Number(row.sortIndex)) ? Number(row.sortIndex) : Number(row.createdAt) || Date.now(),
@@ -4114,6 +4223,14 @@
 
     function getTaskBlocks(task) {
       return normalizeContentBlocks(task.contentBlocks || (task.image?.src ? [{ type: "image", ...task.image }] : []));
+    }
+
+    function normalizeProgress(value) {
+      if (value === "" || value === null || value === undefined) return null;
+      const text = String(value).trim();
+      if (!/^\d+$/.test(text)) return null;
+      const number = Number(text);
+      return Number.isInteger(number) && number >= 1 && number <= 100 ? number : null;
     }
 
     function deriveTitleFromBlocks(blocks) {
