@@ -438,11 +438,6 @@
       background: rgba(244, 63, 94, .13);
     }
 
-    .date-badge.term {
-      color: #047857;
-      background: rgba(16, 185, 129, .13);
-    }
-
     .date-badge.special {
       color: var(--special-color, #7c3aed);
       background: var(--special-bg, rgba(124, 58, 237, .13));
@@ -1576,13 +1571,6 @@
               </select>
             </div>
             <div class="setting-field">
-              <label for="solarTermEnabled">节气显示</label>
-              <select id="solarTermEnabled" class="select">
-                <option value="true">开启</option>
-                <option value="false">关闭</option>
-              </select>
-            </div>
-            <div class="setting-field">
               <label for="holidayEnabled">法定节假日显示</label>
               <select id="holidayEnabled" class="select">
                 <option value="true">开启</option>
@@ -1780,7 +1768,6 @@
       dragEnabled: true,
       monthTintEnabled: true,
       lunarEnabled: true,
-      solarTermEnabled: true,
       holidayEnabled: true,
       specialDates: [],
       categories: {}
@@ -1814,8 +1801,6 @@
       "05-01": "劳动节",
       "10-01": "国庆"
     };
-    const SOLAR_TERM_NAMES = ["小寒","大寒","立春","雨水","惊蛰","春分","清明","谷雨","立夏","小满","芒种","夏至","小暑","大暑","立秋","处暑","白露","秋分","寒露","霜降","立冬","小雪","大雪","冬至"];
-    const SOLAR_TERM_INFO = [0,21208,42467,63836,85337,107014,128867,150921,173149,195551,218072,240693,263343,285989,308563,331033,353350,375494,397447,419210,440795,462224,483532,504758];
     const HOLIDAY_2026 = {
       "2026-01-01": { type: "holiday", name: "元旦" },
       "2026-01-02": { type: "holiday", name: "元旦" },
@@ -1943,7 +1928,6 @@
       dragEnabled: document.getElementById("dragEnabled"),
       monthTintEnabled: document.getElementById("monthTintEnabled"),
       lunarEnabled: document.getElementById("lunarEnabled"),
-      solarTermEnabled: document.getElementById("solarTermEnabled"),
       holidayEnabled: document.getElementById("holidayEnabled"),
       specialDateList: document.getElementById("specialDateList"),
       specialType: document.getElementById("specialType"),
@@ -2844,7 +2828,6 @@
       els.dragEnabled.value = String(settings.dragEnabled);
       els.monthTintEnabled.value = String(settings.monthTintEnabled);
       els.lunarEnabled.value = String(settings.lunarEnabled);
-      els.solarTermEnabled.value = String(settings.solarTermEnabled);
       els.holidayEnabled.value = String(settings.holidayEnabled);
       els.supabaseUrl.value = localStorage.getItem(SUPABASE_URL_KEY) || SUPABASE_URL || "";
       els.supabaseAnonKey.value = localStorage.getItem(SUPABASE_ANON_KEY_KEY) || SUPABASE_ANON_KEY || "";
@@ -2933,7 +2916,6 @@
       settings.dragEnabled = els.dragEnabled.value === "true";
       settings.monthTintEnabled = els.monthTintEnabled.value === "true";
       settings.lunarEnabled = els.lunarEnabled.value === "true";
-      settings.solarTermEnabled = els.solarTermEnabled.value === "true";
       settings.holidayEnabled = els.holidayEnabled.value === "true";
       settings.categories = readCategorySettings();
       applySettings();
@@ -3879,7 +3861,6 @@
       next.dragEnabled = next.dragEnabled !== false;
       next.monthTintEnabled = next.monthTintEnabled !== false;
       next.lunarEnabled = next.lunarEnabled !== false;
-      next.solarTermEnabled = next.solarTermEnabled !== false;
       next.holidayEnabled = next.holidayEnabled !== false;
       next.specialDates = Array.isArray(next.specialDates) ? next.specialDates.filter(isValidSpecialDate) : [];
       next.categories = next.categories && typeof next.categories === "object" ? next.categories : {};
@@ -4071,8 +4052,6 @@
         const lunarFestival = LUNAR_FESTIVALS[`${lunar.month}-${lunar.day}`];
         if (lunarFestival && !hasEquivalentMark(marks, lunarFestival)) marks.push({ kind: "festival", name: lunarFestival });
       }
-      const term = settings.solarTermEnabled ? getSolarTerm(date) : "";
-      if (term && !hasEquivalentMark(marks, term)) marks.push({ kind: "term", name: term });
       return marks;
     }
 
@@ -4110,28 +4089,6 @@
       } catch {
         return null;
       }
-    }
-
-    function getSolarTerm(date) {
-      const chineseDays = window.chineseDays;
-      const key = toKey(date);
-      if (chineseDays?.getSolarTerms) {
-        try {
-          let items = chineseDays.getSolarTerms(key) || [];
-          if (!Array.isArray(items) || !items.length) items = chineseDays.getSolarTerms(key, key) || [];
-          const item = Array.isArray(items) ? items.find(row => row?.date === key && row?.name) : null;
-          if (item?.name) return item.name;
-        } catch {}
-      }
-      const y = date.getFullYear();
-      if (y < 1900 || y > 2100) return "";
-      for (let i = 0; i < SOLAR_TERM_INFO.length; i++) {
-        const termDate = new Date(31556925974.7 * (y - 1900) + SOLAR_TERM_INFO[i] * 60000 + Date.UTC(1900, 0, 6, 2, 5));
-        if (termDate.getMonth() === date.getMonth() && termDate.getDate() === date.getDate()) {
-          return SOLAR_TERM_NAMES[i];
-        }
-      }
-      return "";
     }
 
     function getOfficialHoliday(date) {
