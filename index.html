@@ -49,26 +49,35 @@
       top: 0;
       z-index: 30;
       min-height: var(--topbar-h);
-      padding: 12px 18px;
+      padding: 12px 22px;
       border-bottom: 1px solid var(--line);
       background: rgba(246, 247, 249, .92);
       backdrop-filter: blur(14px);
       display: grid;
-      grid-template-columns: auto auto minmax(240px, 1fr) auto;
-      gap: 12px;
+      grid-template-columns: minmax(420px, auto) minmax(360px, 620px) minmax(220px, auto);
+      gap: 18px;
       align-items: center;
+    }
+
+    .topbar-left {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 18px;
     }
 
     .brand {
       display: flex;
       align-items: center;
       gap: 10px;
-      min-width: 128px;
+      min-width: 0;
+      flex: 0 0 auto;
     }
 
     h1 {
       margin: 0;
-      font-size: 18px;
+      font-size: 17px;
+      font-weight: 560;
       letter-spacing: 0;
       white-space: nowrap;
     }
@@ -88,9 +97,11 @@
 
     .filters {
       display: grid;
-      grid-template-columns: minmax(150px, 1fr) 132px 112px;
+      grid-template-columns: minmax(220px, 320px) 118px 108px;
       gap: 8px;
       min-width: 0;
+      width: min(560px, 100%);
+      justify-self: center;
     }
 
     .search, .select {
@@ -122,13 +133,15 @@
       justify-content: flex-end;
       gap: 8px;
       flex-wrap: wrap;
+      justify-self: end;
     }
 
     .account-pill {
       min-height: 38px;
-      max-width: 180px;
+      max-width: 104px;
       display: inline-flex;
       align-items: center;
+      justify-content: center;
       gap: 6px;
       padding: 0 10px;
       border: 1px solid var(--line);
@@ -373,6 +386,12 @@
       white-space: nowrap;
     }
 
+    .account-pill:hover {
+      color: var(--text);
+      border-color: var(--line-strong);
+      background: #fff;
+    }
+
     .date-inline-chip.special {
       color: var(--special-color, var(--primary));
       font-weight: 800;
@@ -466,6 +485,27 @@
       background: var(--special-color, #7c3aed);
       opacity: .78;
       pointer-events: none;
+    }
+
+    .calendar .week .day.day-good:not(.drag-over),
+    .calendar .week .day.day-good.is-today,
+    .calendar .week .day.day-good.has-special,
+    .calendar .week .day.day-good.weekend.weekend-tint {
+      background: #dff7e8;
+      box-shadow: inset 0 0 0 2px rgba(16, 185, 129, .42);
+    }
+
+    .calendar .week .day.day-bad:not(.drag-over),
+    .calendar .week .day.day-bad.is-today,
+    .calendar .week .day.day-bad.has-special,
+    .calendar .week .day.day-bad.weekend.weekend-tint {
+      background: #ffe1e7;
+      box-shadow: inset 0 0 0 2px rgba(229, 72, 77, .42);
+    }
+
+    .calendar .week .day.day-good.selected-day,
+    .calendar .week .day.day-bad.selected-day {
+      box-shadow: inset 0 0 0 2px rgba(37, 99, 235, .42), inset 0 0 0 4px rgba(255, 255, 255, .58);
     }
 
     .date-num {
@@ -581,6 +621,28 @@
       border-radius: 999px;
       background: var(--primary);
       box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+    }
+
+    .drag-preview {
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 90;
+      pointer-events: none;
+      opacity: .86;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, .78);
+      background: rgba(255, 255, 255, .68);
+      box-shadow: 0 18px 42px rgba(31, 41, 51, .18), 0 0 0 1px rgba(37, 99, 235, .10);
+      backdrop-filter: blur(14px) saturate(1.2);
+      -webkit-backdrop-filter: blur(14px) saturate(1.2);
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+
+    .drag-preview.task,
+    .drag-preview.day-note {
+      cursor: grabbing;
     }
 
     .drag-preview.copy-mode {
@@ -1371,16 +1433,20 @@
       .topbar {
         grid-template-columns: 1fr auto;
       }
-      .month-nav {
-        justify-content: flex-end;
+      .topbar-left {
+        grid-column: 1 / -1;
+        justify-content: space-between;
+        flex-wrap: wrap;
       }
       .filters {
         grid-column: 1 / -1;
         grid-template-columns: minmax(180px, 1fr) 140px 120px;
+        width: 100%;
+        justify-self: stretch;
       }
       .actions {
         grid-column: 1 / -1;
-        justify-content: flex-start;
+        justify-content: flex-end;
       }
     }
 
@@ -1391,7 +1457,8 @@
         grid-template-columns: 1fr;
         padding: 14px;
       }
-      .brand, .month-nav, .actions { justify-content: space-between; }
+      .topbar-left, .month-nav, .actions { justify-content: space-between; }
+      .topbar-left { gap: 12px; }
       .filters { grid-template-columns: 1fr; }
       .weekday { display: none; }
       .calendar { padding: 0 12px 24px; }
@@ -1426,17 +1493,19 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">
-      <h1>极简待办</h1>
-    </div>
+    <div class="topbar-left">
+      <div class="brand">
+        <h1>极简待办</h1>
+      </div>
 
-    <nav class="month-nav" aria-label="月份导航">
-      <button class="btn icon" id="prevMonthBtn" title="上个月">‹</button>
-      <div class="month-label" id="monthLabel">--</div>
-      <button class="btn icon" id="nextMonthBtn" title="下个月">›</button>
-      <button class="btn" id="currentMonthBtn">当月</button>
-      <button class="btn" id="todayBtn">今天</button>
-    </nav>
+      <nav class="month-nav" aria-label="月份导航">
+        <button class="btn icon" id="prevMonthBtn" title="上个月">‹</button>
+        <div class="month-label" id="monthLabel">--</div>
+        <button class="btn icon" id="nextMonthBtn" title="下个月">›</button>
+        <button class="btn" id="currentMonthBtn">当月</button>
+        <button class="btn" id="todayBtn">今天</button>
+      </nav>
+    </div>
 
     <div class="filters">
       <input class="search" id="searchInput" type="search" placeholder="搜索任务" autocomplete="off" />
@@ -1449,11 +1518,8 @@
     </div>
 
     <div class="actions">
-      <span class="account-pill" id="accountStatus">本地模式</span>
-      <button class="btn" id="authBtn">登录</button>
+      <button class="account-pill" id="accountStatus" type="button">本地</button>
       <button class="btn" id="settingsBtn">设置</button>
-      <button class="btn" id="exportBtn">导出</button>
-      <button class="btn" id="importBtn">导入</button>
       <button class="btn primary" id="newTaskBtn">新任务</button>
       <input id="importFile" type="file" accept="application/json" hidden />
     </div>
@@ -1628,6 +1694,8 @@
 
         <div class="settings-panel" data-settings-panel="data">
           <div class="settings-two">
+            <button class="btn" type="button" id="settingsAuthBtn">登录账号</button>
+            <button class="btn" type="button" id="settingsLogoutBtn">退出登录</button>
             <button class="btn" type="button" id="settingsExportBtn">导出数据</button>
             <button class="btn" type="button" id="settingsImportBtn">导入数据</button>
             <button class="btn" type="button" id="clearDoneBtn">清理已完成</button>
@@ -1964,20 +2032,20 @@
     }
 
     function bindEvents() {
-      document.getElementById("authBtn").addEventListener("click", openAuth);
       document.getElementById("prevMonthBtn").addEventListener("click", () => jumpMonth(-1));
       document.getElementById("nextMonthBtn").addEventListener("click", () => jumpMonth(1));
       document.getElementById("currentMonthBtn").addEventListener("click", goCurrentMonth);
       document.getElementById("todayBtn").addEventListener("click", goToday);
       document.getElementById("newTaskBtn").addEventListener("click", () => openModal(toKey(new Date())));
       document.getElementById("settingsBtn").addEventListener("click", openSettings);
-      document.getElementById("exportBtn").addEventListener("click", exportData);
-      document.getElementById("importBtn").addEventListener("click", () => els.importFile.click());
+      els.accountStatus.addEventListener("click", openDataSettings);
       document.getElementById("cancelBtn").addEventListener("click", closeModal);
       document.getElementById("settingsCancelBtn").addEventListener("click", closeSettings);
       document.getElementById("openBulkBtn").addEventListener("click", () => openBulk(els.taskDate.value || toKey(new Date())));
       document.getElementById("bulkCancelBtn").addEventListener("click", closeBulk);
       document.getElementById("bulkPreviewBtn").addEventListener("click", updateBulkPreview);
+      document.getElementById("settingsAuthBtn").addEventListener("click", openAuth);
+      document.getElementById("settingsLogoutBtn").addEventListener("click", signOut);
       document.getElementById("settingsExportBtn").addEventListener("click", exportData);
       document.getElementById("settingsImportBtn").addEventListener("click", () => els.importFile.click());
       document.getElementById("clearDoneBtn").addEventListener("click", clearDoneTasks);
@@ -2271,7 +2339,9 @@
     function activateUnifiedDrag(event) {
       activeDrag.active = true;
       activeDrag.el.classList.add("dragging");
-      activeDrag.el.setPointerCapture?.(event.pointerId);
+      if (Number.isInteger(event.pointerId)) {
+        activeDrag.el.setPointerCapture?.(event.pointerId);
+      }
       document.body.classList.add("dragging-task");
       activeDrag.preview = createDragPreview(activeDrag.el);
       moveDragPreview(event.clientX, event.clientY);
@@ -2282,7 +2352,9 @@
       if (source === "pointer" && activeDrag.pointerId !== event.pointerId) return;
       const drag = activeDrag;
       drag.copyMode = event.altKey || drag.copyMode;
-      drag.el.releasePointerCapture?.(event.pointerId);
+      if (Number.isInteger(event.pointerId)) {
+        drag.el.releasePointerCapture?.(event.pointerId);
+      }
       if (drag.active) {
         suppressNextClick = true;
         const day = getDropDayAt(event.clientX, event.clientY);
@@ -2888,6 +2960,11 @@
       renderSpecialDateList();
       renderTemplateSettingsList();
       showBackdrop(els.settingsBackdrop);
+    }
+
+    function openDataSettings() {
+      openSettings();
+      activateSettingsTab("data");
     }
 
     function closeSettings() {
@@ -3784,13 +3861,18 @@
       const statusText = cloudStatus === "syncing" ? "同步中"
         : cloudStatus === "synced" ? "已同步"
         : cloudStatus === "error" ? "同步失败"
-        : "云同步";
-      const text = currentUser ? `${statusText}：${currentUser.email || "已登录"}` : (configured ? "云同步：未登录" : "本地模式");
-      els.accountStatus.textContent = text;
+        : currentUser ? "已同步" : "本地";
+      els.accountStatus.textContent = statusText;
+      els.accountStatus.title = currentUser
+        ? `已登录：${currentUser.email || currentUser.id}`
+        : (configured ? "云端已配置，点击进入数据设置" : "本地模式，点击进入数据设置");
       els.accountStatus.classList.toggle("syncing", cloudStatus === "syncing");
-      els.accountStatus.classList.toggle("synced", currentUser && cloudStatus === "synced");
+      els.accountStatus.classList.toggle("synced", currentUser && (cloudStatus === "synced" || cloudStatus === "idle"));
       els.accountStatus.classList.toggle("error", cloudStatus === "error");
-      document.getElementById("authBtn").textContent = currentUser ? "账号" : "登录";
+      const settingsAuthBtn = document.getElementById("settingsAuthBtn");
+      const settingsLogoutBtn = document.getElementById("settingsLogoutBtn");
+      if (settingsAuthBtn) settingsAuthBtn.textContent = currentUser ? "账号详情" : "登录账号";
+      if (settingsLogoutBtn) settingsLogoutBtn.hidden = !currentUser;
       if (els.authStatusText) {
         els.authStatusText.textContent = currentUser
           ? `当前账号：${currentUser.email || currentUser.id}。${lastCloudSyncAt ? `最近同步：${new Date(lastCloudSyncAt).toLocaleTimeString()}` : "保存后会自动同步。"}`
