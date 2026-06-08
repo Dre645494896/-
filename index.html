@@ -690,9 +690,15 @@
       text-decoration: line-through;
     }
 
+    .task-title-wrap {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
     .task-title {
       margin: 0;
       min-width: 0;
+      width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: pre-line;
@@ -706,11 +712,12 @@
     }
 
     .task-title-more {
-      margin: -1px 0 0;
-      color: var(--muted);
-      font-size: calc(var(--task-font-size) - 1px);
-      line-height: 1;
+      margin: 0;
+      color: var(--text);
+      font-size: var(--task-font-size);
+      line-height: 1.25;
       font-weight: 700;
+      word-break: break-word;
     }
 
     .task-image {
@@ -2272,8 +2279,10 @@
       return `<div class="task ${task.done ? "done" : ""} ${hasImage ? "has-image" : ""}" draggable="false" data-task-id="${task.id}" data-task-date="${task.date}" style="--cat-color:${cat.color};--cat-bg:${cat.bg}" ondblclick="event.stopPropagation();openModal('${task.date}','${task.id}')">
         <div class="task-main">
           ${visibleBlocks.length ? `<div class="task-content">${visibleBlocks.map(renderTaskBlock).join("")}</div>` : ""}
-          <p class="task-title">${escapeHtml(task.title)}</p>
-          <p class="task-title-more hidden">......</p>
+          <div class="task-title-wrap">
+            <p class="task-title">${escapeHtml(task.title)}</p>
+            <p class="task-title-more hidden">......</p>
+          </div>
           ${showCategory ? `<span class="tag">${escapeHtml(cat.name)}</span>` : ""}
           ${progress ? `<span class="progress-tag">进度 ${progress}%</span>` : ""}
           ${showNote ? `<span class="note">${escapeHtml(task.note)}</span>` : ""}
