@@ -195,6 +195,18 @@
       color: #fff;
     }
 
+    .btn.danger {
+      color: #fff;
+      border-color: var(--red);
+      background: var(--red);
+      box-shadow: 0 8px 18px rgba(229, 72, 77, .20);
+    }
+
+    .btn.danger:hover {
+      background: #dc2626;
+      border-color: #dc2626;
+    }
+
     .btn.icon {
       width: 38px;
       padding: 0;
@@ -629,15 +641,16 @@
       top: 0;
       z-index: 90;
       pointer-events: none;
-      opacity: .86;
+      opacity: .74;
       overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, .78);
-      background: rgba(255, 255, 255, .68);
-      box-shadow: 0 18px 42px rgba(31, 41, 51, .18), 0 0 0 1px rgba(37, 99, 235, .10);
-      backdrop-filter: blur(14px) saturate(1.2);
-      -webkit-backdrop-filter: blur(14px) saturate(1.2);
+      border: 1px solid rgba(255, 255, 255, .82);
+      background: rgba(255, 255, 255, .58);
+      box-shadow: 0 10px 26px rgba(31, 41, 51, .13), 0 0 0 1px rgba(37, 99, 235, .08);
+      backdrop-filter: blur(16px) saturate(1.18);
+      -webkit-backdrop-filter: blur(16px) saturate(1.18);
       transform-origin: 0 0;
       will-change: transform;
+      scale: .985;
     }
 
     .drag-preview.task,
@@ -646,7 +659,7 @@
     }
 
     .drag-preview.copy-mode {
-      box-shadow: 0 12px 26px rgba(37, 99, 235, .22), 0 0 0 2px rgba(37, 99, 235, .28);
+      box-shadow: 0 10px 26px rgba(37, 99, 235, .18), 0 0 0 2px rgba(37, 99, 235, .22);
     }
 
     .drag-preview.copy-mode::after {
@@ -682,7 +695,7 @@
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: normal;
+      white-space: pre-line;
       display: -webkit-box;
       -webkit-line-clamp: 3;
       -webkit-box-orient: vertical;
@@ -690,6 +703,14 @@
       line-height: 1.25;
       font-weight: 700;
       word-break: break-word;
+    }
+
+    .task-title-more {
+      margin: -1px 0 0;
+      color: var(--muted);
+      font-size: calc(var(--task-font-size) - 1px);
+      line-height: 1;
+      font-weight: 700;
     }
 
     .task-image {
@@ -730,7 +751,7 @@
     }
 
     .task.has-image .task-title {
-      white-space: normal;
+      white-space: pre-line;
       display: -webkit-box;
       -webkit-line-clamp: 3;
       -webkit-box-orient: vertical;
@@ -933,6 +954,22 @@
     .modal h2 {
       margin: 0 0 14px;
       font-size: 18px;
+    }
+
+    .confirm-modal {
+      width: min(420px, 100%);
+    }
+
+    .confirm-modal h2 {
+      margin-bottom: 8px;
+    }
+
+    .confirm-message {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
 
     .modal-grid {
@@ -1811,6 +1848,17 @@
     </form>
   </div>
 
+  <div class="modal-backdrop" id="confirmBackdrop">
+    <div class="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <h2 id="confirmTitle">确认操作</h2>
+      <p class="confirm-message" id="confirmMessage"></p>
+      <div class="modal-actions">
+        <button class="btn" type="button" id="confirmCancelBtn">取消</button>
+        <button class="btn danger" type="button" id="confirmOkBtn">确认</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/chinese-days"></script>
@@ -1939,6 +1987,7 @@
     let cloudStatus = "idle";
     let lastCloudSyncAt = 0;
     let bootAutoScrollActive = false;
+    let pendingConfirmAction = null;
 
     const els = {
       monthLabel: document.getElementById("monthLabel"),
@@ -1987,6 +2036,11 @@
       authSwitchText: document.getElementById("authSwitchText"),
       authModeBtn: document.getElementById("authModeBtn"),
       authSubmitBtn: document.getElementById("authSubmitBtn"),
+      confirmBackdrop: document.getElementById("confirmBackdrop"),
+      confirmTitle: document.getElementById("confirmTitle"),
+      confirmMessage: document.getElementById("confirmMessage"),
+      confirmCancelBtn: document.getElementById("confirmCancelBtn"),
+      confirmOkBtn: document.getElementById("confirmOkBtn"),
       dayHeightRange: document.getElementById("dayHeightRange"),
       dayHeightInput: document.getElementById("dayHeightInput"),
       taskDensity: document.getElementById("taskDensity"),
@@ -2063,6 +2117,8 @@
       els.authModeBtn.addEventListener("click", () => setAuthMode(authMode === "login" ? "signup" : "login"));
       document.getElementById("logoutBtn").addEventListener("click", signOut);
       document.getElementById("authCancelBtn").addEventListener("click", closeAuth);
+      els.confirmCancelBtn.addEventListener("click", closeConfirm);
+      els.confirmOkBtn.addEventListener("click", confirmPendingAction);
       document.getElementById("saveCloudConfigBtn").addEventListener("click", saveCloudConfig);
       document.getElementById("syncNowBtn").addEventListener("click", syncNow);
       els.dayHeightRange.addEventListener("input", event => syncDayHeight(event.target.value));
@@ -2081,12 +2137,16 @@
       els.authBackdrop.addEventListener("click", event => {
         if (event.target === els.authBackdrop) closeAuth();
       });
+      els.confirmBackdrop.addEventListener("click", event => {
+        if (event.target === els.confirmBackdrop) closeConfirm();
+      });
       document.addEventListener("keydown", event => {
         if (event.key === "Escape") {
           closeModal();
           closeSettings();
           closeBulk();
           closeAuth();
+          closeConfirm();
         }
       });
       document.addEventListener("pointerdown", handlePointerDragStart);
@@ -2131,6 +2191,7 @@
       lastSunday = weeks[weeks.length - 1][6];
       els.weeks.innerHTML = weeks.map(renderWeek).join("");
       updateMonthFromScroll();
+      updateTaskTitleOverflow();
     }
 
     function renderVisibleWeeks() {
@@ -2139,6 +2200,7 @@
         week.outerHTML = renderWeek(dates);
       });
       updateMonthFromScroll();
+      updateTaskTitleOverflow();
     }
 
     function renderWeek(dates) {
@@ -2211,6 +2273,7 @@
         <div class="task-main">
           ${visibleBlocks.length ? `<div class="task-content">${visibleBlocks.map(renderTaskBlock).join("")}</div>` : ""}
           <p class="task-title">${escapeHtml(task.title)}</p>
+          <p class="task-title-more hidden">......</p>
           ${showCategory ? `<span class="tag">${escapeHtml(cat.name)}</span>` : ""}
           ${progress ? `<span class="progress-tag">进度 ${progress}%</span>` : ""}
           ${showNote ? `<span class="note">${escapeHtml(task.note)}</span>` : ""}
@@ -2227,6 +2290,18 @@
       if (block.type === "image") return `<img class="task-image" src="${escapeAttr(block.src)}" alt="图片内容" loading="lazy" draggable="false" />`;
       if (block.type === "text") return `<p class="task-content-text">${escapeHtml(block.text)}</p>`;
       return "";
+    }
+
+    function updateTaskTitleOverflow() {
+      requestAnimationFrame(() => {
+        document.querySelectorAll(".task-title").forEach(title => {
+          const more = title.nextElementSibling?.classList.contains("task-title-more") ? title.nextElementSibling : null;
+          if (!more) return;
+          const hasExplicitOverflow = (title.textContent || "").split(/\r?\n/).length > 3;
+          const hasVisualOverflow = title.scrollHeight > title.clientHeight + 1;
+          more.classList.toggle("hidden", !(hasExplicitOverflow || hasVisualOverflow));
+        });
+      });
     }
 
     function renderDayNotes(dateKey, notes = getVisibleNotesForDate(dateKey)) {
@@ -3014,6 +3089,28 @@
       setTimeout(() => el.classList.remove("show", "closing"), 190);
     }
 
+    function openConfirmDialog({ title = "确认操作", message = "", confirmText = "确认", danger = false, onConfirm }) {
+      pendingConfirmAction = typeof onConfirm === "function" ? onConfirm : null;
+      els.confirmTitle.textContent = title;
+      els.confirmMessage.textContent = message;
+      els.confirmOkBtn.textContent = confirmText;
+      els.confirmOkBtn.classList.toggle("danger", Boolean(danger));
+      showBackdrop(els.confirmBackdrop);
+      setTimeout(() => els.confirmCancelBtn.focus(), 0);
+    }
+
+    function closeConfirm() {
+      pendingConfirmAction = null;
+      hideBackdrop(els.confirmBackdrop);
+    }
+
+    function confirmPendingAction() {
+      const action = pendingConfirmAction;
+      pendingConfirmAction = null;
+      hideBackdrop(els.confirmBackdrop);
+      if (action) action();
+    }
+
     function switchSettingsTab(event) {
       const btn = event.target.closest("[data-settings-tab]");
       if (!btn) return;
@@ -3132,23 +3229,37 @@
     function deleteTask(id) {
       const task = tasks.find(item => item.id === id);
       if (!task) return;
-      if (!confirm(`删除「${task.title}」？`)) return;
-      tasks = tasks.filter(item => item.id !== id);
-      reorderDateTasks(task.date);
-      persist();
-      renderVisibleWeeks();
-      showToast("已删除");
+      openConfirmDialog({
+        title: "删除任务",
+        message: `确定删除「${task.title}」？`,
+        confirmText: "删除",
+        danger: true,
+        onConfirm: () => {
+          tasks = tasks.filter(item => item.id !== id);
+          reorderDateTasks(task.date);
+          persist();
+          renderVisibleWeeks();
+          showToast("已删除");
+        }
+      });
     }
 
     function deleteDayNote(id) {
       const note = dayNotes.find(item => item.id === id);
       if (!note) return;
-      if (!confirm(`删除备注「${note.text.slice(0, 24)}」？`)) return;
-      dayNotes = dayNotes.filter(item => item.id !== id);
-      reorderDateNotes(note.date);
-      persistDayData();
-      renderVisibleWeeks();
-      showToast("备注已删除");
+      openConfirmDialog({
+        title: "删除备注",
+        message: `确定删除备注「${note.text.slice(0, 24)}」？`,
+        confirmText: "删除",
+        danger: true,
+        onConfirm: () => {
+          dayNotes = dayNotes.filter(item => item.id !== id);
+          reorderDateNotes(note.date);
+          persistDayData();
+          renderVisibleWeeks();
+          showToast("备注已删除");
+        }
+      });
     }
 
     async function handleTaskPaste(event) {
@@ -3325,7 +3436,7 @@
       els.templateStrip.innerHTML = taskTemplates.slice(0, 10).map(t => `
         <span class="template-chip" title="${escapeHtml(t.title)}">
           <span onclick="fillTemplate('${t.id}')">${escapeHtml(t.title)}</span>
-          <button type="button" title="直接添加" onclick="event.stopPropagation();addTemplateToDate('${t.id}','${dateKey}')">+</button>
+          <button type="button" title="填入文本" onclick="event.stopPropagation();fillTemplate('${t.id}')">+</button>
         </span>
       `).join("");
     }
@@ -3335,23 +3446,7 @@
       if (!t) return;
       pendingBlocks = normalizeContentBlocks([{ type: "text", text: t.title }]);
       renderContentBlocks();
-      els.taskCategory.value = t.category;
-      els.taskProgress.value = normalizeProgress(t.progress) || "";
-      els.taskNote.value = t.note || "";
       showToast("已填入模板");
-    }
-
-    function addTemplateToDate(id, dateKey) {
-      const t = taskTemplates.find(item => item.id === id);
-      if (!t) return;
-      const targetDate = dateKey || els.taskDate.value || toKey(new Date());
-      const task = { id: createId(), title: t.title, date: targetDate, category: t.category, note: t.note || "", done: false, createdAt: Date.now(), sortIndex: nextSortIndex(targetDate) };
-      const progress = normalizeProgress(t.progress);
-      if (progress) task.progress = progress;
-      tasks.push(task);
-      persist();
-      renderVisibleWeeks();
-      showToast("已添加模板任务");
     }
 
     function renderTemplateSettingsList() {
