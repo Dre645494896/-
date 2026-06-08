@@ -1875,6 +1875,7 @@
     const TEMPLATES_KEY = "jijiandaiban_templates_v1";
     const DAY_STATES_KEY = "jijiandaiban_day_states_v1";
     const DAY_NOTES_KEY = "jijiandaiban_day_notes_v1";
+    const VIEW_STATE_KEY = "jijiandaiban_view_state_v1";
     const SUPABASE_URL_KEY = "jijiandaiban_supabase_url";
     const SUPABASE_ANON_KEY_KEY = "jijiandaiban_supabase_anon_key";
     const SUPABASE_SESSION_KEY = "jijiandaiban_supabase_session";
@@ -1893,7 +1894,8 @@
       lunarEnabled: true,
       holidayEnabled: true,
       specialDates: [],
-      categories: {}
+      categories: {},
+      viewState: null
     };
     const DENSITY = {
       compact: { taskMinHeight: 28, taskFontSize: 12, taskPadX: 7 },
@@ -1995,6 +1997,8 @@
     let lastCloudSyncAt = 0;
     let bootAutoScrollActive = false;
     let pendingConfirmAction = null;
+    let viewState = null;
+    let restoringViewState = false;
 
     const els = {
       monthLabel: document.getElementById("monthLabel"),
@@ -2082,9 +2086,20 @@
       renderSelects();
       bindEvents();
       handleAuthRedirect();
-      renderAround(new Date());
-      bootAutoScrollActive = true;
-      scrollToTodayOnBoot();
+      viewState = chooseLatestViewState(loadViewState(), settings.viewState);
+      if (viewState) {
+        settings.viewState = viewState;
+        saveViewStateLocal(viewState);
+      }
+      const startDate = viewState ? new Date(viewState.year, viewState.month, 1) : new Date();
+      if (viewState) restoringViewState = true;
+      renderAround(startDate);
+      if (viewState) {
+        restoreViewState(viewState);
+      } else {
+        bootAutoScrollActive = true;
+        scrollToTodayOnBoot();
+      }
       setupInfiniteScroll();
       initCloud();
       setTimeout(() => {
@@ -2168,8 +2183,16 @@
       window.addEventListener("wheel", cancelBootAutoScroll, { passive: true, once: true });
       window.addEventListener("touchstart", cancelBootAutoScroll, { passive: true, once: true });
       window.addEventListener("keydown", cancelBootAutoScroll, { once: true });
-      window.addEventListener("scroll", throttle(updateMonthFromScroll, 80));
+      window.addEventListener("scroll", throttle(() => {
+        updateMonthFromScroll();
+        saveCurrentViewState();
+      }, 160));
       window.addEventListener("resize", throttle(updateMonthFromScroll, 120));
+      window.addEventListener("pagehide", saveCurrentViewStateImmediate);
+      window.addEventListener("beforeunload", saveCurrentViewStateImmediate);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") saveCurrentViewStateImmediate();
+      });
     }
 
     function renderSelects() {
@@ -2896,6 +2919,43 @@
       });
     }
 
+    function restoreViewState(state) {
+      const next = normalizeViewState(state);
+      if (!next) {
+        bootAutoScrollActive = true;
+        scrollToTodayOnBoot();
+        return;
+      }
+      restoringViewState = true;
+      const target = new Date(next.year, next.month, 1);
+      ensureMonthRendered(target);
+      const restore = () => {
+        const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+        let top = next.scrollY;
+        if (next.anchorDate && isDateKey(next.anchorDate)) {
+          ensureDateRendered(parseKey(next.anchorDate));
+          const anchorCell = document.querySelector(`.day[data-date="${next.anchorDate}"]`);
+          const anchorWeek = anchorCell?.closest(".week");
+          if (anchorWeek) {
+            const weekTop = anchorWeek.getBoundingClientRect().top + window.scrollY;
+            top = weekTop + next.anchorOffset;
+          }
+        }
+        window.scrollTo({ top: clamp(top, 0, max), behavior: "auto" });
+        updateMonthFromScroll();
+      };
+      restore();
+      requestAnimationFrame(() => {
+        restore();
+        setTimeout(() => {
+          restore();
+          setTimeout(() => {
+            restoringViewState = false;
+          }, 700);
+        }, 180);
+      });
+    }
+
     function cancelBootAutoScroll() {
       bootAutoScrollActive = false;
     }
@@ -2955,6 +3015,59 @@
       currentYear = year;
       currentMonth = month;
       els.monthLabel.textContent = `${year}年${month + 1}月`;
+    }
+
+    function captureViewState() {
+      const anchor = getCurrentViewAnchor();
+      return normalizeViewState({
+        year: currentYear,
+        month: currentMonth,
+        scrollY: Math.max(0, Math.round(window.scrollY || 0)),
+        savedAt: Date.now(),
+        anchorDate: anchor?.date || null,
+        anchorOffset: anchor?.offset || 0
+      });
+    }
+
+    function getCurrentViewAnchor() {
+      const threshold = getStickyOffset() + 14;
+      const weeks = [...document.querySelectorAll(".week")];
+      let candidate = weeks.find(week => {
+        const rect = week.getBoundingClientRect();
+        return rect.top <= threshold && rect.bottom > threshold;
+      }) || weeks.find(week => week.getBoundingClientRect().bottom > threshold) || weeks[0];
+      if (!candidate) return null;
+      const dates = JSON.parse(candidate.dataset.dates || "[]");
+      const date = dates[0];
+      if (!isDateKey(date)) return null;
+      const weekTop = candidate.getBoundingClientRect().top + window.scrollY;
+      return {
+        date,
+        offset: Math.max(0, Math.round((window.scrollY - weekTop) || 0))
+      };
+    }
+
+    function saveCurrentViewState() {
+      if (restoringViewState) return;
+      const next = captureViewState();
+      if (!next) return;
+      const previous = viewState;
+      if (previous && previous.year === next.year && previous.month === next.month && Math.abs(previous.scrollY - next.scrollY) < 4) return;
+      viewState = next;
+      settings.viewState = next;
+      saveViewStateLocal(next);
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      queueCloudSave();
+    }
+
+    function saveCurrentViewStateImmediate() {
+      if (restoringViewState) return;
+      const next = captureViewState();
+      if (!next) return;
+      viewState = next;
+      settings.viewState = next;
+      saveViewStateLocal(next);
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     }
 
     function openModal(dateKey, id) {
@@ -3812,15 +3925,26 @@
           tasks = normalizeTasks(data.tasks || []);
           const cloudSettings = data.settings || {};
           settings = normalizeSettings({ ...DEFAULT_SETTINGS, ...cloudSettings });
+          const cloudViewState = normalizeViewState(cloudSettings.viewState);
+          viewState = chooseLatestViewState(viewState, loadViewState(), settings.viewState);
+          settings.viewState = viewState;
+          const shouldPushLocalViewState = viewState && (!cloudViewState || viewState.savedAt > cloudViewState.savedAt);
           dayStates = normalizeDayStates(cloudSettings.dayStates || {});
           dayNotes = normalizeDayNotes(cloudSettings.dayNotes || []);
           taskTemplates = normalizeTemplates(data.templates || []);
           saveLocalSnapshot();
           applySettings();
           renderSelects();
-          renderAround(bootAutoScrollActive ? new Date() : new Date(currentYear, currentMonth, 1));
-          if (bootAutoScrollActive) scrollToTodayOnBoot();
+          if (viewState) {
+            restoringViewState = true;
+            renderAround(new Date(viewState.year, viewState.month, 1));
+            restoreViewState(viewState);
+          } else {
+            renderAround(bootAutoScrollActive ? new Date() : new Date(currentYear, currentMonth, 1));
+            if (bootAutoScrollActive) scrollToTodayOnBoot();
+          }
           showToast("已加载云端数据");
+          if (shouldPushLocalViewState) setTimeout(() => saveCloudData(), 0);
         } else if (tasks.length || taskTemplates.length) {
           await saveCloudData();
           showToast("已把本地数据迁移到云端");
@@ -3844,6 +3968,11 @@
 
     async function saveCloudData() {
       if (!supabaseClient || !currentUser) return;
+      const latestViewState = chooseLatestViewState(viewState, settings.viewState, loadViewState());
+      if (latestViewState) {
+        viewState = latestViewState;
+        settings.viewState = latestViewState;
+      }
       setCloudStatus("syncing");
       const payload = {
         user_id: currentUser.id,
@@ -3952,6 +4081,12 @@
     }
 
     function saveLocalSnapshot() {
+      const latestViewState = chooseLatestViewState(viewState, settings.viewState, loadViewState());
+      if (latestViewState) {
+        viewState = latestViewState;
+        settings.viewState = latestViewState;
+        saveViewStateLocal(latestViewState);
+      }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
       localStorage.setItem(TEMPLATES_KEY, JSON.stringify(taskTemplates));
@@ -4077,6 +4212,21 @@
       }
     }
 
+    function loadViewState() {
+      try {
+        const raw = localStorage.getItem(VIEW_STATE_KEY);
+        return normalizeViewState(raw ? JSON.parse(raw) : null);
+      } catch {
+        return null;
+      }
+    }
+
+    function saveViewStateLocal(state) {
+      const next = normalizeViewState(state);
+      if (!next) return;
+      localStorage.setItem(VIEW_STATE_KEY, JSON.stringify(next));
+    }
+
     function applySettings() {
       settings = normalizeSettings(settings);
       const density = DENSITY[settings.taskDensity] || DENSITY.standard;
@@ -4101,7 +4251,40 @@
       next.holidayEnabled = next.holidayEnabled !== false;
       next.specialDates = Array.isArray(next.specialDates) ? next.specialDates.filter(isValidSpecialDate) : [];
       next.categories = next.categories && typeof next.categories === "object" ? next.categories : {};
+      next.viewState = normalizeViewState(next.viewState);
       return next;
+    }
+
+    function normalizeViewState(value) {
+      if (!value || typeof value !== "object") return null;
+      const year = Number(value.year);
+      const month = Number(value.month);
+      const scrollY = Number(value.scrollY);
+      const savedAt = Number(value.savedAt);
+      const anchorDate = isDateKey(value.anchorDate) ? value.anchorDate : null;
+      const anchorOffset = Number(value.anchorOffset);
+      if (!Number.isInteger(year) || year < 1970 || year > 2100) return null;
+      if (!Number.isInteger(month) || month < 0 || month > 11) return null;
+      if (!Number.isFinite(scrollY) || scrollY < 0) return null;
+      if (!Number.isFinite(savedAt) || savedAt <= 0) return null;
+      const next = {
+        year,
+        month,
+        scrollY: Math.max(0, Math.round(scrollY)),
+        savedAt
+      };
+      if (anchorDate) {
+        next.anchorDate = anchorDate;
+        next.anchorOffset = Number.isFinite(anchorOffset) && anchorOffset >= 0 ? Math.round(anchorOffset) : 0;
+      }
+      return next;
+    }
+
+    function chooseLatestViewState(...states) {
+      return states
+        .map(normalizeViewState)
+        .filter(Boolean)
+        .sort((a, b) => b.savedAt - a.savedAt)[0] || null;
     }
 
     function getCategories() {
