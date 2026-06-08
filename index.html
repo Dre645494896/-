@@ -3161,14 +3161,14 @@
       const progress = normalizeProgress(els.taskProgress.value);
       if (els.taskProgress.value.trim() && !progress) return showToast("进度请输入 1-100 的整数");
       const payload = {
-        title: deriveTitleFromBlocks(pendingBlocks),
+        title: deriveFullTitleFromBlocks(pendingBlocks),
         date: els.taskDate.value,
         category: els.taskCategory.value,
         note: els.taskNote.value.trim(),
         contentBlocks: normalizeContentBlocks(pendingBlocks),
         progress
       };
-      if (!payload.title && payload.contentBlocks.length) payload.title = deriveTitleFromBlocks(payload.contentBlocks);
+      if (!payload.title && payload.contentBlocks.length) payload.title = deriveFullTitleFromBlocks(payload.contentBlocks);
       if (!payload.title) return showToast("请输入任务标题或粘贴内容");
       if (editingId) {
         tasks = tasks.map(task => task.id === editingId ? { ...task, ...payload } : task);
@@ -4421,6 +4421,13 @@
     function deriveTitleFromBlocks(blocks) {
       const text = blocks.find(block => block.type === "text")?.text;
       if (text) return text.split(/\r?\n/)[0].slice(0, 80);
+      if (blocks.some(block => block.type === "image")) return "图片事项";
+      return "";
+    }
+
+    function deriveFullTitleFromBlocks(blocks) {
+      const text = blocks.find(block => block.type === "text")?.text;
+      if (text) return text.replace(/\r\n/g, "\n").trim().slice(0, 500);
       if (blocks.some(block => block.type === "image")) return "图片事项";
       return "";
     }
