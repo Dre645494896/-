@@ -655,6 +655,56 @@
       cursor: grabbing;
     }
 
+    .task.priority-high {
+      border-color: rgba(220, 38, 38, .28);
+      border-left-color: #dc2626;
+      background: #fff1f2;
+    }
+
+    .task.priority-urgent {
+      border-color: rgba(127, 29, 29, .45);
+      border-left-color: #7f1d1d;
+      background: #991b1b;
+      color: #fff;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+    }
+
+    .task.priority-urgent .task-title,
+    .task.priority-urgent .task-title-more,
+    .task.priority-urgent .note {
+      color: #fff;
+    }
+
+    .task.priority-urgent .tag,
+    .task.priority-urgent .progress-tag,
+    .task.priority-urgent .priority-tag {
+      background: rgba(255, 255, 255, .18);
+      color: #fff;
+    }
+
+    .task.priority-urgent .mini-btn {
+      background: rgba(255, 255, 255, .12);
+      border-color: rgba(255, 255, 255, .18);
+      color: #fff;
+    }
+
+    .priority-tag {
+      border-radius: 5px;
+      padding: 1px 5px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .priority-tag.high {
+      background: #ffe4e6;
+      color: #be123c;
+    }
+
+    .priority-tag.urgent {
+      background: #7f1d1d;
+      color: #fff;
+    }
+
     .drop-marker {
       height: 3px;
       border-radius: 999px;
@@ -1015,6 +1065,29 @@
     .modal-grid {
       display: grid;
       gap: 10px;
+    }
+
+    .modal-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .task-priority-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .task-priority-wrap select {
+      width: 96px;
+      min-height: 34px;
+      padding: 0 9px;
     }
 
     .modal textarea,
@@ -1620,7 +1693,17 @@
 
   <div class="modal-backdrop" id="modalBackdrop">
     <form class="modal" id="taskForm">
-      <h2 id="modalTitle">新任务</h2>
+      <div class="modal-heading">
+        <h2 id="modalTitle">新任务</h2>
+        <label class="task-priority-wrap" id="taskPriorityWrap">
+          优先级
+          <select id="taskPriority">
+            <option value="normal">普通</option>
+            <option value="high">优先</option>
+            <option value="urgent">紧急</option>
+          </select>
+        </label>
+      </div>
       <div class="modal-grid">
         <div id="taskTitle" class="paste-zone" contenteditable="true" data-placeholder="输入任务内容，或在这里按 Ctrl+V 粘贴图片/文字"></div>
         <div class="modal-row" id="taskMetaRow">
@@ -1941,6 +2024,11 @@
       { id: "study", name: "学习", color: "#f59e0b", bg: "#fff6dc" },
       { id: "other", name: "其他", color: "#8b5cf6", bg: "#f3ecff" }
     ];
+    const PRIORITIES = {
+      normal: { id: "normal", name: "普通" },
+      high: { id: "high", name: "优先" },
+      urgent: { id: "urgent", name: "紧急" }
+    };
     const COLOR_SWATCHES = ["#2563eb", "#0ea5e9", "#10b981", "#84cc16", "#f59e0b", "#ef4444", "#ec4899", "#8b5cf6", "#64748b", "#111827"];
     const WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
     const LUNAR_DAY_NAMES = ["初一","初二","初三","初四","初五","初六","初七","初八","初九","初十","十一","十二","十三","十四","十五","十六","十七","十八","十九","二十","廿一","廿二","廿三","廿四","廿五","廿六","廿七","廿八","廿九","三十"];
@@ -2050,6 +2138,8 @@
       taskMetaRow: document.getElementById("taskMetaRow"),
       taskDate: document.getElementById("taskDate"),
       taskCategory: document.getElementById("taskCategory"),
+      taskPriorityWrap: document.getElementById("taskPriorityWrap"),
+      taskPriority: document.getElementById("taskPriority"),
       taskProgress: document.getElementById("taskProgress"),
       taskNote: document.getElementById("taskNote"),
       pasteZone: document.getElementById("taskTitle"),
@@ -2340,7 +2430,10 @@
       const visibleBlocks = blocks.filter(block => block.type === "image").slice(0, 3);
       const hasImage = blocks.some(block => block.type === "image");
       const progress = normalizeProgress(task.progress);
-      return `<div class="task ${task.done ? "done" : ""} ${hasImage ? "has-image" : ""}" draggable="false" data-task-id="${task.id}" data-task-date="${task.date}" style="--cat-color:${cat.color};--cat-bg:${cat.bg}" ondblclick="event.stopPropagation();openModal('${task.date}','${task.id}')">
+      const priority = normalizePriority(task.priority);
+      const priorityClass = priority === "normal" ? "" : `priority-${priority}`;
+      const priorityLabel = priority === "normal" ? "" : PRIORITIES[priority].name;
+      return `<div class="task ${task.done ? "done" : ""} ${hasImage ? "has-image" : ""} ${priorityClass}" draggable="false" data-task-id="${task.id}" data-task-date="${task.date}" style="--cat-color:${cat.color};--cat-bg:${cat.bg}" ondblclick="event.stopPropagation();openModal('${task.date}','${task.id}')">
         <div class="task-main">
           ${visibleBlocks.length ? `<div class="task-content">${visibleBlocks.map(renderTaskBlock).join("")}</div>` : ""}
           <div class="task-title-wrap">
@@ -2348,6 +2441,7 @@
             <p class="task-title-more hidden">......</p>
           </div>
           ${showCategory ? `<span class="tag">${escapeHtml(cat.name)}</span>` : ""}
+          ${priorityLabel ? `<span class="priority-tag ${priority}">${escapeHtml(priorityLabel)}</span>` : ""}
           ${progress ? `<span class="progress-tag">进度 ${progress}%</span>` : ""}
           ${showNote ? `<span class="note">${escapeHtml(task.note)}</span>` : ""}
         </div>
@@ -2683,6 +2777,7 @@
         id: createId(),
         date: targetDate,
         done: false,
+        priority: normalizePriority(task.priority),
         createdAt: Date.now(),
         sortIndex: nextSortIndex(targetDate),
         contentBlocks: getTaskBlocks(task).map(block => ({ ...block, createdAt: Number(block.createdAt) || Date.now() }))
@@ -3116,6 +3211,7 @@
       els.modalTitle.textContent = task ? "编辑任务" : "新任务";
       els.taskDate.value = task ? task.date : dateKey || toKey(new Date());
       els.taskCategory.value = task ? task.category : settings.defaultCategory;
+      els.taskPriority.value = normalizePriority(task?.priority);
       els.taskProgress.value = task && normalizeProgress(task.progress) ? normalizeProgress(task.progress) : "";
       els.taskNote.value = task ? task.note || "" : "";
       pendingBlocks = task ? getTaskBlocks(task).map(block => ({ ...block })) : [];
@@ -3135,6 +3231,7 @@
       els.modalTitle.textContent = note ? "编辑日期备注" : "新增日期备注";
       els.taskDate.value = note ? note.date : dateKey || toKey(new Date());
       els.taskCategory.value = settings.defaultCategory;
+      els.taskPriority.value = "normal";
       els.taskProgress.value = "";
       els.taskNote.value = "";
       pendingBlocks = note ? [{ type: "text", text: note.text }] : [];
@@ -3150,6 +3247,7 @@
       els.taskForm?.classList.toggle("note-mode", noteMode);
       els.taskMetaRow?.classList.toggle("hidden", false);
       els.taskCategory?.classList.toggle("hidden", noteMode);
+      els.taskPriorityWrap?.classList.toggle("hidden", noteMode);
       els.taskProgress?.classList.toggle("hidden", noteMode);
       els.taskNote?.classList.toggle("hidden", noteMode);
       els.saveTemplateLabel?.classList.toggle("hidden", noteMode);
@@ -3165,6 +3263,7 @@
       els.taskForm?.classList.remove("note-mode");
       pendingBlocks = [];
       els.taskForm.reset();
+      if (els.taskPriority) els.taskPriority.value = "normal";
       renderContentBlocks();
     }
 
@@ -3324,6 +3423,7 @@
         title: deriveFullTitleFromBlocks(pendingBlocks),
         date: els.taskDate.value,
         category: els.taskCategory.value,
+        priority: normalizePriority(els.taskPriority.value),
         note: els.taskNote.value.trim(),
         contentBlocks: normalizeContentBlocks(pendingBlocks),
         progress
@@ -3579,9 +3679,10 @@
       const title = payload.title.trim();
       if (!title) return;
       const progress = normalizeProgress(payload.progress);
-      const exists = taskTemplates.some(t => t.title === title && t.category === payload.category && (t.note || "") === (payload.note || "") && normalizeProgress(t.progress) === progress);
+      const priority = normalizePriority(payload.priority);
+      const exists = taskTemplates.some(t => t.title === title && t.category === payload.category && normalizePriority(t.priority) === priority && (t.note || "") === (payload.note || "") && normalizeProgress(t.progress) === progress);
       if (exists) return;
-      const template = { id: createId(), title, category: payload.category, note: payload.note || "", createdAt: Date.now() };
+      const template = { id: createId(), title, category: payload.category, priority, note: payload.note || "", createdAt: Date.now() };
       if (progress) template.progress = progress;
       taskTemplates.unshift(template);
       taskTemplates = taskTemplates.slice(0, 24);
@@ -3616,10 +3717,12 @@
       }
       els.templateSettingsList.innerHTML = `<div class="special-list">${taskTemplates.map(t => {
         const cat = getCategory(t.category);
+        const priority = normalizePriority(t.priority);
+        const priorityText = priority === "normal" ? "" : ` · ${PRIORITIES[priority].name}`;
         const progress = normalizeProgress(t.progress);
         return `<div class="special-item">
           <span class="special-dot" style="--special-color:${cat.color}"></span>
-          <span>${escapeHtml(t.title)} · ${escapeHtml(cat.name)}${progress ? ` · ${progress}%` : ""}</span>
+          <span>${escapeHtml(t.title)} · ${escapeHtml(cat.name)}${priorityText}${progress ? ` · ${progress}%` : ""}</span>
           <button class="mini-btn bad" type="button" onclick="deleteTemplate('${t.id}')">×</button>
         </div>`;
       }).join("")}</div>`;
@@ -3674,7 +3777,7 @@
       const sortCounters = {};
       const rows = items.filter(item => !existing.has(`${item.date}|${item.title}`)).map(item => {
         sortCounters[item.date] = sortCounters[item.date] ?? nextSortIndex(item.date);
-        return { id: createId(), title: item.title, date: item.date, category: item.category, note: item.note || "", done: false, createdAt: Date.now(), sortIndex: sortCounters[item.date]++ };
+        return { id: createId(), title: item.title, date: item.date, category: item.category, priority: "normal", note: item.note || "", done: false, createdAt: Date.now(), sortIndex: sortCounters[item.date]++ };
       });
       tasks = [...tasks, ...rows];
       persist();
@@ -4230,6 +4333,7 @@
           id: row.id || createId(),
           title: String(row.title || row.text || "").trim(),
           category: CATEGORIES.some(cat => cat.id === row.category) ? row.category : "work",
+          priority: normalizePriority(row.priority),
           note: String(row.note || ""),
           progress: normalizeProgress(row.progress),
           createdAt: Number(row.createdAt) || Date.now()
@@ -4604,6 +4708,7 @@
             title: String(row.title || row.text || deriveTitleFromBlocks(contentBlocks)).trim(),
             date: isDateKey(row.date) ? row.date : toKey(new Date()),
             category: CATEGORIES.some(cat => cat.id === row.category) ? row.category : (CATEGORIES.some(cat => cat.id === row.cat) ? row.cat : "work"),
+            priority: normalizePriority(row.priority),
             note: String(row.note || ""),
             progress: normalizeProgress(row.progress),
             done: Boolean(row.done),
@@ -4646,6 +4751,10 @@
       if (!/^\d+$/.test(text)) return null;
       const number = Number(text);
       return Number.isInteger(number) && number >= 1 && number <= 100 ? number : null;
+    }
+
+    function normalizePriority(value) {
+      return Object.prototype.hasOwnProperty.call(PRIORITIES, value) ? value : "normal";
     }
 
     function deriveTitleFromBlocks(blocks) {
