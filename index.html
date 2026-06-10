@@ -305,6 +305,30 @@
       color: #d94665;
     }
 
+    .day.rest-day:not(.is-today):not(.selected-day):not(.has-special):not(.day-good):not(.day-bad):not(.drag-over) {
+      background: #f2f4f7;
+    }
+
+    .rest-day-pill,
+    .work-adjust-pill {
+      border-radius: 999px;
+      padding: 2px 6px;
+      font-size: 11px;
+      font-weight: 760;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .rest-day-pill {
+      color: #64748b;
+      background: rgba(100, 116, 139, .14);
+    }
+
+    .work-adjust-pill {
+      color: #92400e;
+      background: rgba(245, 158, 11, .16);
+    }
+
     .day.is-today {
       position: relative;
       z-index: 1;
@@ -588,12 +612,15 @@
 
     .day-notes {
       width: 100%;
+      min-width: 0;
       margin-top: auto;
       padding-top: 8px;
       display: grid;
       gap: 4px;
       align-content: end;
-      justify-items: end;
+      justify-content: stretch;
+      justify-items: stretch;
+      align-self: stretch;
     }
 
     .task {
@@ -802,7 +829,10 @@
     }
 
     .day-note {
-      width: min(100%, 92%);
+      width: 100%;
+      justify-self: stretch;
+      margin-left: 0;
+      margin-right: 0;
       min-height: 28px;
       border: 1px solid rgba(225, 29, 72, .22);
       border-left: 4px solid #e11d48;
@@ -858,7 +888,10 @@
     }
 
     .note-drop-marker {
-      width: min(100%, 92%);
+      width: 100%;
+      justify-self: stretch;
+      margin-left: 0;
+      margin-right: 0;
       height: 3px;
       border-radius: 999px;
       background: #e11d48;
@@ -2257,6 +2290,11 @@
       const weekday = WEEKDAYS[(date.getDay() + 6) % 7];
       const marks = getDateMarks(date);
       const special = marks.find(mark => mark.kind === "special");
+      const isWorkAdjustDay = marks.some(mark => mark.kind === "workday");
+      const isRestDay = !isWorkAdjustDay && (weekend || marks.some(mark => mark.kind === "holiday"));
+      const dayTypePill = isWorkAdjustDay
+        ? '<span class="work-adjust-pill">调休上班</span>'
+        : isRestDay ? '<span class="rest-day-pill">休息</span>' : "";
       const style = special ? ` style="--special-color:${special.color};--special-bg:${hexToSoftBg(special.color)}"` : "";
       const classes = [
         "day",
@@ -2265,6 +2303,8 @@
         weekend ? "weekend" : "",
         settings.weekendStyle === "tint" ? "weekend-tint" : "",
         marks.some(mark => mark.kind === "holiday") ? "has-holiday" : "",
+        isRestDay ? "rest-day" : "",
+        isWorkAdjustDay ? "work-adjust-day" : "",
         special ? "has-special" : "",
         dayState === "good" ? "day-good" : "",
         dayState === "bad" ? "day-bad" : "",
@@ -2275,6 +2315,7 @@
         <div class="day-head">
           <div class="date-main">
             <span class="date-num">${date.getDate()}</span>
+            ${dayTypePill}
             ${renderDateInlineMeta(date, marks)}
             <span class="date-week">${weekday}</span>
             ${today ? '<span class="today-pill">今天</span>' : ""}
@@ -2312,7 +2353,6 @@
         </div>
         <div class="task-actions">
           <button class="mini-btn good" type="button" title="${task.done ? "取消完成" : "完成"}" onclick="event.stopPropagation();toggleTask('${task.id}')">${task.done ? "↩" : "✓"}</button>
-          <button class="mini-btn" type="button" title="编辑" onclick="event.stopPropagation();openModal('${task.date}','${task.id}')">✎</button>
           <button class="mini-btn bad" type="button" title="删除" onclick="event.stopPropagation();deleteTask('${task.id}')">×</button>
         </div>
       </div>`;
@@ -2348,7 +2388,6 @@
         <p class="day-note-title">${escapeHtml(note.text)}</p>
         <div class="day-note-actions">
           <button class="mini-btn good" type="button" title="${note.done ? "取消完成" : "完成"}" onclick="event.stopPropagation();toggleDayNote('${note.id}')">${note.done ? "↩" : "✓"}</button>
-          <button class="mini-btn" type="button" title="编辑" onclick="event.stopPropagation();openNoteModal('${note.date}','${note.id}')">✎</button>
           <button class="mini-btn bad" type="button" title="删除" onclick="event.stopPropagation();deleteDayNote('${note.id}')">×</button>
         </div>
       </div>`;
@@ -2788,10 +2827,9 @@
     }
 
     function getCopyRowsForDate(dateKey) {
-      return [
-        ...getTasksForDate(dateKey).map(item => ({ type: "task", item })),
-        ...getNotesForDate(dateKey).map(item => ({ type: "note", item }))
-      ].filter(row => getUserTextParts(row).length || getUserImageBlocks(row).length);
+      return getTasksForDate(dateKey)
+        .map(item => ({ type: "task", item }))
+        .filter(row => getUserTextParts(row).length || getUserImageBlocks(row).length);
     }
 
     function buildDateCopyHtml(dateKey, rows) {
