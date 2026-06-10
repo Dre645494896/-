@@ -1084,10 +1084,45 @@
       white-space: nowrap;
     }
 
-    .task-priority-wrap select {
-      width: 96px;
-      min-height: 34px;
+    .priority-segment {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 2px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel-soft);
+    }
+
+    .priority-option {
+      min-width: 44px;
+      min-height: 30px;
+      border: 1px solid transparent;
+      border-radius: 5px;
+      background: transparent;
+      color: var(--muted);
       padding: 0 9px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .priority-option.active {
+      background: #fff;
+      color: var(--text);
+      border-color: var(--line);
+      box-shadow: 0 1px 5px rgba(31, 41, 51, .08);
+    }
+
+    .priority-option[data-priority="high"].active {
+      color: #be123c;
+      background: #fff1f2;
+      border-color: rgba(220, 38, 38, .24);
+    }
+
+    .priority-option[data-priority="urgent"].active {
+      color: #fff;
+      background: #991b1b;
+      border-color: #7f1d1d;
     }
 
     .modal textarea,
@@ -1695,14 +1730,15 @@
     <form class="modal" id="taskForm">
       <div class="modal-heading">
         <h2 id="modalTitle">新任务</h2>
-        <label class="task-priority-wrap" id="taskPriorityWrap">
-          优先级
-          <select id="taskPriority">
-            <option value="normal">普通</option>
-            <option value="high">优先</option>
-            <option value="urgent">紧急</option>
-          </select>
-        </label>
+        <div class="task-priority-wrap" id="taskPriorityWrap">
+          <span>优先级</span>
+          <input id="taskPriority" type="hidden" value="normal" />
+          <div class="priority-segment" id="taskPriorityOptions">
+            <button class="priority-option active" type="button" data-priority="normal">普通</button>
+            <button class="priority-option" type="button" data-priority="high">优先</button>
+            <button class="priority-option" type="button" data-priority="urgent">紧急</button>
+          </div>
+        </div>
       </div>
       <div class="modal-grid">
         <div id="taskTitle" class="paste-zone" contenteditable="true" data-placeholder="输入任务内容，或在这里按 Ctrl+V 粘贴图片/文字"></div>
@@ -2140,6 +2176,7 @@
       taskCategory: document.getElementById("taskCategory"),
       taskPriorityWrap: document.getElementById("taskPriorityWrap"),
       taskPriority: document.getElementById("taskPriority"),
+      taskPriorityOptions: document.getElementById("taskPriorityOptions"),
       taskProgress: document.getElementById("taskProgress"),
       taskNote: document.getElementById("taskNote"),
       pasteZone: document.getElementById("taskTitle"),
@@ -2256,6 +2293,10 @@
       els.taskForm.addEventListener("paste", handleTaskPaste);
       els.taskDate.addEventListener("click", showTaskDatePicker);
       els.taskDate.addEventListener("focus", showTaskDatePicker);
+      els.taskPriorityOptions.addEventListener("click", event => {
+        const button = event.target.closest("[data-priority]");
+        if (button) setTaskPriority(button.dataset.priority);
+      });
       els.bulkForm.addEventListener("submit", createBulkTasks);
       els.settingsForm.addEventListener("submit", saveSettings);
       els.authForm.addEventListener("submit", handleAuthSubmit);
@@ -3211,7 +3252,7 @@
       els.modalTitle.textContent = task ? "编辑任务" : "新任务";
       els.taskDate.value = task ? task.date : dateKey || toKey(new Date());
       els.taskCategory.value = task ? task.category : settings.defaultCategory;
-      els.taskPriority.value = normalizePriority(task?.priority);
+      setTaskPriority(task?.priority);
       els.taskProgress.value = task && normalizeProgress(task.progress) ? normalizeProgress(task.progress) : "";
       els.taskNote.value = task ? task.note || "" : "";
       pendingBlocks = task ? getTaskBlocks(task).map(block => ({ ...block })) : [];
@@ -3231,7 +3272,7 @@
       els.modalTitle.textContent = note ? "编辑日期备注" : "新增日期备注";
       els.taskDate.value = note ? note.date : dateKey || toKey(new Date());
       els.taskCategory.value = settings.defaultCategory;
-      els.taskPriority.value = "normal";
+      setTaskPriority("normal");
       els.taskProgress.value = "";
       els.taskNote.value = "";
       pendingBlocks = note ? [{ type: "text", text: note.text }] : [];
@@ -3263,8 +3304,16 @@
       els.taskForm?.classList.remove("note-mode");
       pendingBlocks = [];
       els.taskForm.reset();
-      if (els.taskPriority) els.taskPriority.value = "normal";
+      setTaskPriority("normal");
       renderContentBlocks();
+    }
+
+    function setTaskPriority(value) {
+      const priority = normalizePriority(value);
+      if (els.taskPriority) els.taskPriority.value = priority;
+      els.taskPriorityOptions?.querySelectorAll("[data-priority]").forEach(button => {
+        button.classList.toggle("active", button.dataset.priority === priority);
+      });
     }
 
     function showTaskDatePicker() {
