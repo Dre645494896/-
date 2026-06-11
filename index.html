@@ -1703,7 +1703,7 @@
     </div>
 
     <div class="actions">
-      <button class="account-pill" id="accountStatus" type="button">本地</button>
+      <button class="account-pill" id="accountStatus" type="button">登录</button>
       <button class="btn" id="settingsBtn">设置</button>
       <button class="btn primary" id="newTaskBtn">新任务</button>
       <input id="importFile" type="file" accept="application/json" hidden />
@@ -1890,31 +1890,13 @@
 
         <div class="settings-panel" data-settings-panel="data">
           <div class="settings-two">
-            <button class="btn" type="button" id="settingsAuthBtn">登录账号</button>
-            <button class="btn" type="button" id="settingsLogoutBtn">退出登录</button>
             <button class="btn" type="button" id="settingsExportBtn">导出数据</button>
             <button class="btn" type="button" id="settingsImportBtn">导入数据</button>
             <button class="btn" type="button" id="clearDoneBtn">清理已完成</button>
           </div>
-          <div class="category-settings">
-            <div class="category-settings-title">账号与云同步</div>
-            <div class="settings-two">
-              <div class="setting-field">
-                <label for="supabaseUrl">Supabase URL</label>
-                <input id="supabaseUrl" type="url" placeholder="https://xxxx.supabase.co" />
-              </div>
-              <div class="setting-field">
-                <label for="supabaseAnonKey">Supabase anon key</label>
-                <input id="supabaseAnonKey" type="password" placeholder="eyJ..." />
-              </div>
-            </div>
-            <div class="modal-actions">
-              <button class="btn" type="button" id="saveCloudConfigBtn">保存云端配置</button>
-              <button class="btn" type="button" id="syncNowBtn">立即同步</button>
-            </div>
-            <p class="setting-help" id="cloudHelp">未配置 Supabase 时，数据只保存在当前浏览器本地。</p>
-          </div>
-          <p class="setting-help">清理已完成会删除所有已完成事项；导入导出仍可作为离线备份。</p>
+          <input id="supabaseUrl" type="hidden" />
+          <input id="supabaseAnonKey" type="hidden" />
+          <p class="setting-help" id="cloudHelp">导入导出可作为离线备份；清理已完成会删除所有已完成事项。</p>
         </div>
       </div>
       <div class="modal-actions">
@@ -1931,14 +1913,15 @@
         <div class="auth-status" id="authStatusText">登录后会把任务、模板和设置同步到云端。</div>
         <input id="authEmail" type="email" placeholder="邮箱" autocomplete="email" />
         <input id="authPassword" type="password" placeholder="密码，至少 6 位" autocomplete="current-password" />
-        <div class="auth-switch">
+        <div class="auth-switch" hidden>
           <span id="authSwitchText">没有账号？</span>
-          <button class="auth-mode-link" type="button" id="authModeBtn">注册</button>
         </div>
       </div>
       <div class="modal-actions">
         <button class="btn" type="button" id="logoutBtn">退出登录</button>
-        <button class="btn" type="button" id="authCancelBtn">取消</button>
+        <button class="btn" type="button" id="authSyncBtn">立即同步</button>
+        <button class="btn" type="button" id="authCancelBtn">关闭</button>
+        <button class="btn" type="button" id="authModeBtn">注册</button>
         <button class="btn primary" type="submit" id="authSubmitBtn">登录</button>
       </div>
     </form>
@@ -2207,6 +2190,9 @@
       authSwitchText: document.getElementById("authSwitchText"),
       authModeBtn: document.getElementById("authModeBtn"),
       authSubmitBtn: document.getElementById("authSubmitBtn"),
+      authSyncBtn: document.getElementById("authSyncBtn"),
+      logoutBtn: document.getElementById("logoutBtn"),
+      authCancelBtn: document.getElementById("authCancelBtn"),
       confirmBackdrop: document.getElementById("confirmBackdrop"),
       confirmTitle: document.getElementById("confirmTitle"),
       confirmMessage: document.getElementById("confirmMessage"),
@@ -2274,14 +2260,12 @@
       document.getElementById("todayBtn").addEventListener("click", goToday);
       document.getElementById("newTaskBtn").addEventListener("click", () => openModal(toKey(new Date())));
       document.getElementById("settingsBtn").addEventListener("click", openSettings);
-      els.accountStatus.addEventListener("click", openDataSettings);
+      els.accountStatus.addEventListener("click", openAuth);
       document.getElementById("cancelBtn").addEventListener("click", closeModal);
       document.getElementById("settingsCancelBtn").addEventListener("click", closeSettings);
       document.getElementById("openBulkBtn").addEventListener("click", () => openBulk(els.taskDate.value || toKey(new Date())));
       document.getElementById("bulkCancelBtn").addEventListener("click", closeBulk);
       document.getElementById("bulkPreviewBtn").addEventListener("click", updateBulkPreview);
-      document.getElementById("settingsAuthBtn").addEventListener("click", openAuth);
-      document.getElementById("settingsLogoutBtn").addEventListener("click", signOut);
       document.getElementById("settingsExportBtn").addEventListener("click", exportData);
       document.getElementById("settingsImportBtn").addEventListener("click", () => els.importFile.click());
       document.getElementById("clearDoneBtn").addEventListener("click", clearDoneTasks);
@@ -2302,11 +2286,10 @@
       els.authForm.addEventListener("submit", handleAuthSubmit);
       els.authModeBtn.addEventListener("click", () => setAuthMode(authMode === "login" ? "signup" : "login"));
       document.getElementById("logoutBtn").addEventListener("click", signOut);
+      els.authSyncBtn.addEventListener("click", syncNow);
       document.getElementById("authCancelBtn").addEventListener("click", closeAuth);
       els.confirmCancelBtn.addEventListener("click", closeConfirm);
       els.confirmOkBtn.addEventListener("click", confirmPendingAction);
-      document.getElementById("saveCloudConfigBtn").addEventListener("click", saveCloudConfig);
-      document.getElementById("syncNowBtn").addEventListener("click", syncNow);
       els.dayHeightRange.addEventListener("input", event => syncDayHeight(event.target.value));
       els.dayHeightInput.addEventListener("input", event => syncDayHeight(event.target.value));
       document.getElementById("addSpecialDateBtn").addEventListener("click", addSpecialDateFromForm);
@@ -3356,10 +3339,10 @@
     }
 
     function openAuth() {
-      setAuthMode("login");
+      if (!currentUser) setAuthMode("login");
       updateCloudUi();
       showBackdrop(els.authBackdrop);
-      setTimeout(() => els.authEmail.focus(), 0);
+      if (!currentUser) setTimeout(() => els.authEmail.focus(), 0);
     }
 
     function closeAuth() {
@@ -3374,12 +3357,23 @@
 
     function updateAuthModeUi() {
       const signingUp = authMode === "signup";
-      els.authTitle.textContent = signingUp ? "注册账号" : "登录账号";
-      els.authSubmitBtn.textContent = signingUp ? "发送确认邮件" : "登录";
+      const signedIn = Boolean(currentUser);
+      els.authTitle.textContent = signedIn ? "账号状态" : (signingUp ? "注册账号" : "登录账号");
+      els.authSubmitBtn.textContent = signingUp ? "注册" : "登录";
       els.authSwitchText.textContent = signingUp ? "已有账号？" : "没有账号？";
-      els.authModeBtn.textContent = signingUp ? "登录" : "注册";
+      els.authModeBtn.textContent = signingUp ? "返回登录" : "注册";
       els.authPassword.autocomplete = signingUp ? "new-password" : "current-password";
-      if (!currentUser) {
+      els.authEmail.hidden = signedIn;
+      els.authPassword.hidden = signedIn;
+      els.authModeBtn.hidden = signedIn;
+      els.authSubmitBtn.hidden = signedIn;
+      els.logoutBtn.hidden = !signedIn;
+      els.authSyncBtn.hidden = !signedIn;
+      els.authCancelBtn.textContent = signedIn ? "关闭" : "取消";
+      if (signedIn) {
+        const statusText = getCloudStatusText();
+        els.authStatusText.textContent = `当前账号：${currentUser.email || currentUser.id}。当前状态：${statusText}${lastCloudSyncAt ? `，最近同步 ${new Date(lastCloudSyncAt).toLocaleTimeString()}` : ""}。`;
+      } else {
         els.authStatusText.textContent = signingUp
           ? "填写邮箱和密码后会发送确认邮件，请在邮箱里完成注册。"
           : "登录后会把任务、模板和设置同步到云端。";
@@ -3953,7 +3947,7 @@
       const url = els.supabaseUrl.value.trim();
       const anonKey = els.supabaseAnonKey.value.trim();
       if (!url || !anonKey) {
-        showToast("请填写 Supabase URL 和 anon key");
+        showToast("云同步配置缺失，请联系网站管理员");
         return;
       }
       localStorage.setItem(SUPABASE_URL_KEY, url);
@@ -3993,7 +3987,7 @@
         return showToast(error.message || "登录失败");
       } finally {
         els.authSubmitBtn.disabled = false;
-        els.authSubmitBtn.textContent = authMode === "signup" ? "发送确认邮件" : "登录";
+        els.authSubmitBtn.textContent = authMode === "signup" ? "注册" : "登录";
       }
       closeAuth();
       showToast("已登录");
@@ -4028,7 +4022,7 @@
         showToast(error.message || "注册失败");
       } finally {
         els.authSubmitBtn.disabled = false;
-        els.authSubmitBtn.textContent = authMode === "signup" ? "发送确认邮件" : "登录";
+        els.authSubmitBtn.textContent = authMode === "signup" ? "注册" : "登录";
       }
     }
 
@@ -4090,9 +4084,7 @@
       if (supabaseClient && cloudReady) return true;
       const { url, anonKey } = getCloudConfig();
       if (!url || !anonKey) {
-        showToast("请先在设置中保存 Supabase 配置");
-        openSettings();
-        activateSettingsTab("data");
+        showToast("云同步配置缺失，请联系网站管理员");
         return false;
       }
       supabaseClient = { url, anonKey, session: loadCloudSession() };
@@ -4284,33 +4276,29 @@
       localStorage.setItem(DAY_NOTES_KEY, JSON.stringify(dayNotes));
     }
 
+    function getCloudStatusText() {
+      return cloudStatus === "syncing" ? "同步中"
+        : cloudStatus === "synced" ? "已同步"
+        : cloudStatus === "error" ? "同步失败"
+        : currentUser ? "已同步" : "登录";
+    }
+
     function updateCloudUi() {
       const { url, anonKey } = getCloudConfig();
       const configured = Boolean(url && anonKey);
-      const statusText = cloudStatus === "syncing" ? "同步中"
-        : cloudStatus === "synced" ? "已同步"
-        : cloudStatus === "error" ? "同步失败"
-        : currentUser ? "已同步" : "本地";
-      els.accountStatus.textContent = statusText;
+      const statusText = getCloudStatusText();
+      els.accountStatus.textContent = currentUser ? statusText : "登录";
       els.accountStatus.title = currentUser
         ? `已登录：${currentUser.email || currentUser.id}`
-        : (configured ? "云端已配置，点击进入数据设置" : "本地模式，点击进入数据设置");
+        : "点击登录或注册账号";
       els.accountStatus.classList.toggle("syncing", cloudStatus === "syncing");
       els.accountStatus.classList.toggle("synced", currentUser && (cloudStatus === "synced" || cloudStatus === "idle"));
       els.accountStatus.classList.toggle("error", cloudStatus === "error");
-      const settingsAuthBtn = document.getElementById("settingsAuthBtn");
-      const settingsLogoutBtn = document.getElementById("settingsLogoutBtn");
-      if (settingsAuthBtn) settingsAuthBtn.textContent = currentUser ? "账号详情" : "登录账号";
-      if (settingsLogoutBtn) settingsLogoutBtn.hidden = !currentUser;
       if (els.authStatusText) {
-        els.authStatusText.textContent = currentUser
-          ? `当前账号：${currentUser.email || currentUser.id}。${lastCloudSyncAt ? `最近同步：${new Date(lastCloudSyncAt).toLocaleTimeString()}` : "保存后会自动同步。"}`
-          : (configured ? "登录后会把任务、模板和设置同步到云端。" : "请先在设置的数据页填写 Supabase URL 和 anon key。");
+        updateAuthModeUi();
       }
       if (els.cloudHelp) {
-        els.cloudHelp.textContent = currentUser
-          ? `已登录 ${currentUser.email || ""}，当前状态：${statusText}${lastCloudSyncAt ? `，最近同步 ${new Date(lastCloudSyncAt).toLocaleTimeString()}` : ""}。`
-          : (configured ? "云端配置已保存，登录账号后开始同步。" : "未配置 Supabase 时，数据只保存在当前浏览器本地。");
+        els.cloudHelp.textContent = "导入导出可作为离线备份；清理已完成会删除所有已完成事项。账号与同步请使用右上角入口。";
       }
     }
 
