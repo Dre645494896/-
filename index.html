@@ -96,12 +96,40 @@
     }
 
     .filters {
-      display: grid;
-      grid-template-columns: minmax(220px, 320px) 118px 108px;
-      gap: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       min-width: 0;
-      width: min(560px, 100%);
+      width: min(300px, 100%);
       justify-self: center;
+    }
+
+    .category-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-soft);
+    }
+
+    .category-toggle-btn {
+      min-width: 92px;
+      min-height: 30px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 760;
+      transition: .15s ease;
+    }
+
+    .category-toggle-btn.active {
+      background: var(--panel);
+      border-color: var(--line);
+      color: var(--primary);
+      box-shadow: 0 1px 2px rgba(31, 41, 51, .06);
     }
 
     .search, .select {
@@ -134,6 +162,43 @@
       gap: 8px;
       flex-wrap: wrap;
       justify-self: end;
+      position: relative;
+    }
+
+    .desktop-search {
+      position: relative;
+    }
+
+    .search-icon-btn {
+      width: 38px;
+      min-height: 38px;
+      padding: 0;
+    }
+
+    .search-icon-btn svg {
+      width: 17px;
+      height: 17px;
+      stroke: currentColor;
+      stroke-width: 2.2;
+      fill: none;
+    }
+
+    .desktop-search-panel {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      z-index: 45;
+      width: 280px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      display: none;
+    }
+
+    .desktop-search.open .desktop-search-panel {
+      display: block;
     }
 
     .account-pill {
@@ -1692,17 +1757,22 @@
       </nav>
     </div>
 
-    <div class="filters">
-      <input class="search" id="searchInput" type="search" placeholder="搜索任务" autocomplete="off" />
-      <select class="select" id="categoryFilter"></select>
-      <select class="select" id="statusFilter">
-        <option value="all">全部状态</option>
-        <option value="open">未完成</option>
-        <option value="done">已完成</option>
-      </select>
+    <div class="filters" aria-label="任务分类筛选">
+      <div class="category-toggle" id="categoryToggle">
+        <button class="category-toggle-btn active" type="button" data-category-view="work">工作</button>
+        <button class="category-toggle-btn" type="button" data-category-view="personal">个人</button>
+      </div>
     </div>
 
     <div class="actions">
+      <div class="desktop-search" id="desktopSearch">
+        <button class="btn icon search-icon-btn" id="searchToggleBtn" type="button" title="搜索任务" aria-label="搜索任务">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"></circle><path d="m16 16 4 4"></path></svg>
+        </button>
+        <div class="desktop-search-panel">
+          <input class="search" id="searchInput" type="search" placeholder="搜索当前分类任务" autocomplete="off" />
+        </div>
+      </div>
       <button class="account-pill" id="accountStatus" type="button">登录</button>
       <button class="btn" id="settingsBtn">设置</button>
       <button class="btn primary" id="newTaskBtn">新任务</button>
@@ -1769,7 +1839,6 @@
         <button class="settings-tab active" type="button" data-settings-tab="appearance">外观</button>
         <button class="settings-tab" type="button" data-settings-tab="calendar">标注</button>
         <button class="settings-tab" type="button" data-settings-tab="tasks">任务</button>
-        <button class="settings-tab" type="button" data-settings-tab="categories">分类</button>
         <button class="settings-tab" type="button" data-settings-tab="data">数据</button>
       </div>
       <div class="settings-grid">
@@ -1794,8 +1863,7 @@
               <label for="taskDisplay">事项显示内容</label>
               <select id="taskDisplay" class="select">
                 <option value="title">只显示标题</option>
-                <option value="category">标题 + 分类</option>
-                <option value="note">标题 + 分类 + 备注</option>
+                <option value="note">标题 + 备注</option>
               </select>
             </div>
             <div class="setting-field">
@@ -1864,10 +1932,6 @@
         <div class="settings-panel" data-settings-panel="tasks">
           <div class="settings-two">
             <div class="setting-field">
-              <label for="defaultCategory">默认新增分类</label>
-              <select id="defaultCategory" class="select"></select>
-            </div>
-            <div class="setting-field">
               <label for="dragEnabled">拖拽移动/排序</label>
               <select id="dragEnabled" class="select">
                 <option value="true">开启</option>
@@ -1878,13 +1942,6 @@
           <div class="category-settings">
             <div class="category-settings-title">任务模板</div>
             <div id="templateSettingsList"></div>
-          </div>
-        </div>
-
-        <div class="settings-panel" data-settings-panel="categories">
-          <div class="category-settings">
-            <div class="category-settings-title">分类名称与颜色</div>
-            <div id="categorySettings"></div>
           </div>
         </div>
 
@@ -2020,7 +2077,7 @@
       version: 4,
       dayMinHeight: 360,
       taskDensity: "standard",
-      taskDisplay: "category",
+      taskDisplay: "title",
       defaultCategory: "work",
       otherMonthMode: "dim",
       weekendStyle: "tint",
@@ -2039,9 +2096,7 @@
     };
     const CATEGORIES = [
       { id: "work", name: "工作", color: "#2563eb", bg: "#eaf1ff" },
-      { id: "life", name: "生活", color: "#10b981", bg: "#e9fbf3" },
-      { id: "study", name: "学习", color: "#f59e0b", bg: "#fff6dc" },
-      { id: "other", name: "其他", color: "#8b5cf6", bg: "#f3ecff" }
+      { id: "personal", name: "个人", color: "#10b981", bg: "#e9fbf3" }
     ];
     const PRIORITIES = {
       normal: { id: "normal", name: "普通" },
@@ -2139,6 +2194,7 @@
     let pendingConfirmAction = null;
     let viewState = null;
     let restoringViewState = false;
+    let activeCategory = "work";
 
     const els = {
       monthLabel: document.getElementById("monthLabel"),
@@ -2147,8 +2203,9 @@
       bottomSentinel: document.getElementById("bottomSentinel"),
       accountStatus: document.getElementById("accountStatus"),
       searchInput: document.getElementById("searchInput"),
-      categoryFilter: document.getElementById("categoryFilter"),
-      statusFilter: document.getElementById("statusFilter"),
+      categoryToggle: document.getElementById("categoryToggle"),
+      desktopSearch: document.getElementById("desktopSearch"),
+      searchToggleBtn: document.getElementById("searchToggleBtn"),
       importFile: document.getElementById("importFile"),
       modalBackdrop: document.getElementById("modalBackdrop"),
       taskForm: document.getElementById("taskForm"),
@@ -2202,7 +2259,6 @@
       dayHeightInput: document.getElementById("dayHeightInput"),
       taskDensity: document.getElementById("taskDensity"),
       taskDisplay: document.getElementById("taskDisplay"),
-      defaultCategory: document.getElementById("defaultCategory"),
       otherMonthMode: document.getElementById("otherMonthMode"),
       weekendStyle: document.getElementById("weekendStyle"),
       dragEnabled: document.getElementById("dragEnabled"),
@@ -2216,7 +2272,6 @@
       specialName: document.getElementById("specialName"),
       specialColor: document.getElementById("specialColor"),
       specialColorPalette: document.getElementById("specialColorPalette"),
-      categorySettings: document.getElementById("categorySettings"),
       templateSettingsList: document.getElementById("templateSettingsList"),
       supabaseUrl: document.getElementById("supabaseUrl"),
       supabaseAnonKey: document.getElementById("supabaseAnonKey"),
@@ -2271,8 +2326,6 @@
       document.getElementById("clearDoneBtn").addEventListener("click", clearDoneTasks);
       els.importFile.addEventListener("change", importData);
       els.searchInput.addEventListener("input", renderVisibleWeeks);
-      els.categoryFilter.addEventListener("change", renderVisibleWeeks);
-      els.statusFilter.addEventListener("change", renderVisibleWeeks);
       els.taskForm.addEventListener("submit", saveModalTask);
       els.taskForm.addEventListener("paste", handleTaskPaste);
       els.taskDate.addEventListener("click", showTaskDatePicker);
@@ -2309,8 +2362,18 @@
       els.confirmBackdrop.addEventListener("click", event => {
         if (event.target === els.confirmBackdrop) closeConfirm();
       });
+      els.categoryToggle.addEventListener("click", event => {
+        const button = event.target.closest("[data-category-view]");
+        if (!button) return;
+        setActiveCategory(button.dataset.categoryView);
+      });
+      els.searchToggleBtn.addEventListener("click", event => {
+        event.stopPropagation();
+        toggleDesktopSearch();
+      });
       document.addEventListener("keydown", event => {
         if (event.key === "Escape") {
+          closeDesktopSearch();
           closeModal();
           closeSettings();
           closeBulk();
@@ -2344,15 +2407,10 @@
 
     function renderSelects() {
       const categories = getCategories();
-      const categoryOptions = [
-        '<option value="all">全部分类</option>',
-        ...categories.map(cat => `<option value="${cat.id}">${cat.name}</option>`)
-      ].join("");
-      els.categoryFilter.innerHTML = categoryOptions;
       const taskOptions = categories.map(cat => `<option value="${cat.id}">${cat.name}</option>`).join("");
       els.taskCategory.innerHTML = taskOptions;
-      els.defaultCategory.innerHTML = taskOptions;
       els.bulkCategory.innerHTML = taskOptions;
+      updateCategoryToggle();
     }
 
     function renderAround(date) {
@@ -2447,8 +2505,7 @@
       </article>`;
     }
     function renderTask(task) {
-      const cat = getCategory(task.category);
-      const showCategory = settings.taskDisplay === "category" || settings.taskDisplay === "note";
+      const cat = getCategory(normalizeCategoryId(task.category));
       const showNote = settings.taskDisplay === "note" && task.note;
       const blocks = getTaskBlocks(task);
       const visibleBlocks = blocks.filter(block => block.type === "image").slice(0, 3);
@@ -2464,7 +2521,6 @@
             <p class="task-title">${escapeHtml(task.title)}</p>
             <p class="task-title-more hidden">......</p>
           </div>
-          ${showCategory ? `<span class="tag">${escapeHtml(cat.name)}</span>` : ""}
           ${priorityLabel ? `<span class="priority-tag ${priority}">${escapeHtml(priorityLabel)}</span>` : ""}
           ${progress ? `<span class="progress-tag">进度 ${progress}%</span>` : ""}
           ${showNote ? `<span class="note">${escapeHtml(task.note)}</span>` : ""}
@@ -2513,24 +2569,49 @@
 
     function getVisibleTasksForDate(key) {
       const query = els.searchInput.value.trim().toLowerCase();
-      const category = els.categoryFilter.value;
-      const status = els.statusFilter.value;
       return tasks
         .filter(task => task.date === key)
-        .filter(task => category === "all" || task.category === category)
-        .filter(task => status === "all" || (status === "done" ? task.done : !task.done))
+        .filter(task => normalizeCategoryId(task.category) === activeCategory)
         .filter(task => !query || task.title.toLowerCase().includes(query) || (task.note || "").toLowerCase().includes(query) || getTaskBlocks(task).some(block => block.type === "text" && block.text.toLowerCase().includes(query)))
         .sort(taskOrder);
     }
 
     function getVisibleNotesForDate(key) {
-      const query = els.searchInput.value.trim().toLowerCase();
-      const status = els.statusFilter.value;
       return dayNotes
         .filter(note => note.date === key)
-        .filter(note => status === "all" || (status === "done" ? note.done : !note.done))
-        .filter(note => !query || note.text.toLowerCase().includes(query))
         .sort(noteOrder);
+    }
+
+    function setActiveCategory(category) {
+      const next = normalizeCategoryId(category);
+      if (activeCategory === next) return;
+      activeCategory = next;
+      updateCategoryToggle();
+      renderVisibleWeeks();
+    }
+
+    function updateCategoryToggle() {
+      if (!els.categoryToggle) return;
+      els.categoryToggle.querySelectorAll("[data-category-view]").forEach(button => {
+        button.classList.toggle("active", button.dataset.categoryView === activeCategory);
+      });
+    }
+
+    function toggleDesktopSearch() {
+      const open = !els.desktopSearch.classList.contains("open");
+      els.desktopSearch.classList.toggle("open", open);
+      if (open) setTimeout(() => els.searchInput.focus(), 0);
+      else {
+        els.searchInput.value = "";
+        renderVisibleWeeks();
+      }
+    }
+
+    function closeDesktopSearch() {
+      if (!els.desktopSearch?.classList.contains("open")) return;
+      els.desktopSearch.classList.remove("open");
+      els.searchInput.value = "";
+      renderVisibleWeeks();
     }
 
     function handlePointerDragStart(event) {
@@ -2881,6 +2962,9 @@
         suppressNextClick = false;
         event.preventDefault();
         return;
+      }
+      if (els.desktopSearch?.classList.contains("open") && !event.target.closest(".desktop-search")) {
+        closeDesktopSearch();
       }
       if (event.target.closest(".modal, button, input, select, textarea, .task, .day-note")) return;
       const day = event.target.closest(".day");
@@ -3234,7 +3318,7 @@
       const task = tasks.find(item => item.id === editingId);
       els.modalTitle.textContent = task ? "编辑任务" : "新任务";
       els.taskDate.value = task ? task.date : dateKey || toKey(new Date());
-      els.taskCategory.value = task ? task.category : settings.defaultCategory;
+      els.taskCategory.value = task ? normalizeCategoryId(task.category) : settings.defaultCategory;
       setTaskPriority(task?.priority);
       els.taskProgress.value = task && normalizeProgress(task.progress) ? normalizeProgress(task.progress) : "";
       els.taskNote.value = task ? task.note || "" : "";
@@ -3310,7 +3394,6 @@
       els.dayHeightInput.value = settings.dayMinHeight;
       els.taskDensity.value = settings.taskDensity;
       els.taskDisplay.value = settings.taskDisplay;
-      els.defaultCategory.value = settings.defaultCategory;
       els.otherMonthMode.value = settings.otherMonthMode;
       els.weekendStyle.value = settings.weekendStyle;
       els.dragEnabled.value = String(settings.dragEnabled);
@@ -3321,7 +3404,6 @@
       els.supabaseAnonKey.value = localStorage.getItem(SUPABASE_ANON_KEY_KEY) || SUPABASE_ANON_KEY || "";
       updateCloudUi();
       activateSettingsTab("appearance");
-      renderCategorySettings();
       resetSpecialDateEditor();
       renderSpecialDateList();
       renderTemplateSettingsList();
@@ -3435,15 +3517,15 @@
       event.preventDefault();
       settings.dayMinHeight = clamp(Number(els.dayHeightInput.value) || DEFAULT_SETTINGS.dayMinHeight, 300, 600);
       settings.taskDensity = DENSITY[els.taskDensity.value] ? els.taskDensity.value : DEFAULT_SETTINGS.taskDensity;
-      settings.taskDisplay = ["title", "category", "note"].includes(els.taskDisplay.value) ? els.taskDisplay.value : DEFAULT_SETTINGS.taskDisplay;
-      settings.defaultCategory = getCategories().some(cat => cat.id === els.defaultCategory.value) ? els.defaultCategory.value : DEFAULT_SETTINGS.defaultCategory;
+      settings.taskDisplay = ["title", "note"].includes(els.taskDisplay.value) ? els.taskDisplay.value : DEFAULT_SETTINGS.taskDisplay;
+      settings.defaultCategory = DEFAULT_SETTINGS.defaultCategory;
       settings.otherMonthMode = ["dim", "hideTasks"].includes(els.otherMonthMode.value) ? els.otherMonthMode.value : DEFAULT_SETTINGS.otherMonthMode;
       settings.weekendStyle = ["normal", "tint"].includes(els.weekendStyle.value) ? els.weekendStyle.value : DEFAULT_SETTINGS.weekendStyle;
       settings.dragEnabled = els.dragEnabled.value === "true";
       settings.monthTintEnabled = els.monthTintEnabled.value === "true";
       settings.lunarEnabled = els.lunarEnabled.value === "true";
       settings.holidayEnabled = els.holidayEnabled.value === "true";
-      settings.categories = readCategorySettings();
+      settings.categories = {};
       applySettings();
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
       queueCloudSave();
@@ -3465,7 +3547,7 @@
       const payload = {
         title: deriveFullTitleFromBlocks(pendingBlocks),
         date: els.taskDate.value,
-        category: els.taskCategory.value,
+        category: normalizeCategoryId(els.taskCategory.value),
         priority: normalizePriority(els.taskPriority.value),
         note: els.taskNote.value.trim(),
         contentBlocks: normalizeContentBlocks(pendingBlocks),
@@ -3723,9 +3805,10 @@
       if (!title) return;
       const progress = normalizeProgress(payload.progress);
       const priority = normalizePriority(payload.priority);
-      const exists = taskTemplates.some(t => t.title === title && t.category === payload.category && normalizePriority(t.priority) === priority && (t.note || "") === (payload.note || "") && normalizeProgress(t.progress) === progress);
+      const category = normalizeCategoryId(payload.category);
+      const exists = taskTemplates.some(t => t.title === title && normalizeCategoryId(t.category) === category && normalizePriority(t.priority) === priority && (t.note || "") === (payload.note || "") && normalizeProgress(t.progress) === progress);
       if (exists) return;
-      const template = { id: createId(), title, category: payload.category, priority, note: payload.note || "", createdAt: Date.now() };
+      const template = { id: createId(), title, category, priority, note: payload.note || "", createdAt: Date.now() };
       if (progress) template.progress = progress;
       taskTemplates.unshift(template);
       taskTemplates = taskTemplates.slice(0, 24);
@@ -3759,7 +3842,7 @@
         return;
       }
       els.templateSettingsList.innerHTML = `<div class="special-list">${taskTemplates.map(t => {
-        const cat = getCategory(t.category);
+        const cat = getCategory(normalizeCategoryId(t.category));
         const priority = normalizePriority(t.priority);
         const priorityText = priority === "normal" ? "" : ` · ${PRIORITIES[priority].name}`;
         const progress = normalizeProgress(t.progress);
@@ -3780,7 +3863,7 @@
 
     function openBulk(dateKey) {
       const currentTitle = deriveTitleFromBlocks(readEditorBlocks());
-      const currentCategory = els.taskCategory.value || settings.defaultCategory;
+      const currentCategory = normalizeCategoryId(els.taskCategory.value || settings.defaultCategory);
       closeModal();
       const d = dateKey || toKey(new Date());
       els.bulkTitle.value = currentTitle;
@@ -3831,7 +3914,7 @@
 
     function buildBulkItems() {
       const mode = els.bulkMode.value;
-      const category = els.bulkCategory.value || settings.defaultCategory;
+      const category = normalizeCategoryId(els.bulkCategory.value || settings.defaultCategory);
       const title = els.bulkTitle.value.trim();
       if (mode === "text") return parseBulkText(category);
       if (!title) return [];
@@ -4369,7 +4452,7 @@
         .map(row => ({
           id: row.id || createId(),
           title: String(row.title || row.text || "").trim(),
-          category: CATEGORIES.some(cat => cat.id === row.category) ? row.category : "work",
+          category: normalizeCategoryId(row.category),
           priority: normalizePriority(row.priority),
           note: String(row.note || ""),
           progress: normalizeProgress(row.progress),
@@ -4420,8 +4503,8 @@
       next.dayMinHeight = clamp(Number(next.dayMinHeight) || DEFAULT_SETTINGS.dayMinHeight, 300, 600);
       next.version = DEFAULT_SETTINGS.version;
       next.taskDensity = DENSITY[next.taskDensity] ? next.taskDensity : DEFAULT_SETTINGS.taskDensity;
-      next.taskDisplay = ["title", "category", "note"].includes(next.taskDisplay) ? next.taskDisplay : DEFAULT_SETTINGS.taskDisplay;
-      next.defaultCategory = CATEGORIES.some(cat => cat.id === next.defaultCategory) ? next.defaultCategory : DEFAULT_SETTINGS.defaultCategory;
+      next.taskDisplay = ["title", "note"].includes(next.taskDisplay) ? next.taskDisplay : DEFAULT_SETTINGS.taskDisplay;
+      next.defaultCategory = DEFAULT_SETTINGS.defaultCategory;
       next.otherMonthMode = ["dim", "hideTasks"].includes(next.otherMonthMode) ? next.otherMonthMode : DEFAULT_SETTINGS.otherMonthMode;
       next.weekendStyle = ["normal", "tint"].includes(next.weekendStyle) ? next.weekendStyle : DEFAULT_SETTINGS.weekendStyle;
       next.dragEnabled = next.dragEnabled !== false;
@@ -4429,7 +4512,7 @@
       next.lunarEnabled = next.lunarEnabled !== false;
       next.holidayEnabled = next.holidayEnabled !== false;
       next.specialDates = Array.isArray(next.specialDates) ? next.specialDates.filter(isValidSpecialDate) : [];
-      next.categories = next.categories && typeof next.categories === "object" ? next.categories : {};
+      next.categories = {};
       next.viewState = normalizeViewState(next.viewState);
       return next;
     }
@@ -4467,26 +4550,11 @@
     }
 
     function getCategories() {
-      return CATEGORIES.map(cat => {
-        const custom = settings.categories && settings.categories[cat.id] ? settings.categories[cat.id] : {};
-        const color = isHexColor(custom.color) ? custom.color : cat.color;
-        return {
-          ...cat,
-          name: String(custom.name || cat.name).trim() || cat.name,
-          color,
-          bg: hexToSoftBg(color)
-        };
-      });
+      return CATEGORIES;
     }
 
-    function renderCategorySettings() {
-      els.categorySettings.innerHTML = getCategories().map(cat => `
-        <div class="category-setting" data-cat="${cat.id}">
-          <input type="text" value="${escapeHtml(cat.name)}" data-cat-name="${cat.id}" maxlength="12" />
-          <input type="hidden" value="${cat.color}" data-cat-color="${cat.id}" />
-          ${renderColorPalette(cat.color, "category", cat.id)}
-        </div>
-      `).join("");
+    function normalizeCategoryId(value) {
+      return value === "work" ? "work" : "personal";
     }
 
     function renderColorPalette(selectedColor, scope, id = "") {
@@ -4507,30 +4575,13 @@
 
     function selectPaletteColor(scope, id, color) {
       if (!isHexColor(color)) return;
-      const root = scope === "category"
-        ? els.categorySettings.querySelector(`[data-cat="${id}"]`)
-        : document.querySelector(".special-editor");
+      const root = document.querySelector(".special-editor");
       if (!root) return;
-      const input = scope === "category"
-        ? root.querySelector(`[data-cat-color="${id}"]`)
-        : els.specialColor;
+      const input = els.specialColor;
       if (input) input.value = color;
       root.querySelectorAll(`[data-color-scope="${scope}"] .color-swatch`).forEach(btn => {
         btn.classList.toggle("active", btn.style.getPropertyValue("--swatch-color").trim().toLowerCase() === color.toLowerCase());
       });
-    }
-
-    function readCategorySettings() {
-      const result = {};
-      CATEGORIES.forEach(cat => {
-        const name = els.categorySettings.querySelector(`[data-cat-name="${cat.id}"]`)?.value.trim();
-        const color = els.categorySettings.querySelector(`[data-cat-color="${cat.id}"]`)?.value;
-        result[cat.id] = {
-          name: name || cat.name,
-          color: isHexColor(color) ? color : cat.color
-        };
-      });
-      return result;
     }
 
     function renderSpecialDateList() {
@@ -4744,7 +4795,7 @@
             id: row.id || createId(),
             title: String(row.title || row.text || deriveTitleFromBlocks(contentBlocks)).trim(),
             date: isDateKey(row.date) ? row.date : toKey(new Date()),
-            category: CATEGORIES.some(cat => cat.id === row.category) ? row.category : (CATEGORIES.some(cat => cat.id === row.cat) ? row.cat : "work"),
+            category: normalizeCategoryId(row.category || row.cat),
             priority: normalizePriority(row.priority),
             note: String(row.note || ""),
             progress: normalizeProgress(row.progress),
@@ -4852,7 +4903,8 @@
     }
 
     function getCategory(id) {
-      return getCategories().find(cat => cat.id === id) || getCategories()[0];
+      const categoryId = normalizeCategoryId(id);
+      return getCategories().find(cat => cat.id === categoryId) || getCategories()[0];
     }
 
     function getWeekDates(monday) {
