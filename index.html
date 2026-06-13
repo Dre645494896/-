@@ -54,7 +54,7 @@
       background: rgba(246, 247, 249, .92);
       backdrop-filter: blur(14px);
       display: grid;
-      grid-template-columns: minmax(420px, auto) minmax(360px, 620px) minmax(220px, auto);
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
       gap: 18px;
       align-items: center;
     }
@@ -67,7 +67,7 @@
     }
 
     .brand {
-      display: flex;
+      display: none;
       align-items: center;
       gap: 10px;
       min-width: 0;
@@ -96,11 +96,14 @@
     }
 
     .filters {
+      position: absolute;
+      left: 50vw;
+      transform: translateX(-50%);
       display: flex;
       align-items: center;
       justify-content: center;
       min-width: 0;
-      width: min(300px, 100%);
+      width: max-content;
       justify-self: center;
     }
 
@@ -1689,10 +1692,11 @@
         flex-wrap: wrap;
       }
       .filters {
+        position: static;
+        transform: none;
         grid-column: 1 / -1;
-        grid-template-columns: minmax(180px, 1fr) 140px 120px;
-        width: 100%;
-        justify-self: stretch;
+        width: max-content;
+        justify-self: center;
       }
       .actions {
         grid-column: 1 / -1;
