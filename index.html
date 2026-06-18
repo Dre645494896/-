@@ -1682,6 +1682,373 @@
       transform: translateX(-50%) translateY(0);
     }
 
+    .mobile-shell {
+      display: none;
+    }
+
+    .mobile-top,
+    .mobile-bottom {
+      position: fixed;
+      left: 0;
+      right: 0;
+      z-index: 70;
+      pointer-events: none;
+    }
+
+    .mobile-top {
+      top: 0;
+      padding: max(12px, env(safe-area-inset-top)) 16px 10px;
+      background: linear-gradient(180deg, rgba(246, 247, 249, .98), rgba(246, 247, 249, .86));
+      backdrop-filter: blur(18px);
+      border-bottom: 1px solid rgba(203, 213, 225, .58);
+    }
+
+    .mobile-toolbar,
+    .mobile-bottom-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      pointer-events: auto;
+    }
+
+    .mobile-title-btn,
+    .mobile-icon-btn,
+    .mobile-bottom-btn {
+      min-height: 44px;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .92);
+      color: #111827;
+      box-shadow: 0 10px 30px rgba(31, 41, 51, .10);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform .16s ease, background .16s ease, box-shadow .16s ease;
+    }
+
+    .mobile-title-btn {
+      gap: 7px;
+      padding: 0 16px 0 13px;
+      font-size: 20px;
+      font-weight: 820;
+    }
+
+    .mobile-title-btn svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 3;
+      fill: none;
+    }
+
+    .mobile-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .76);
+      box-shadow: 0 10px 30px rgba(31, 41, 51, .10);
+    }
+
+    .mobile-icon-btn {
+      width: 44px;
+      box-shadow: none;
+      background: transparent;
+    }
+
+    .mobile-icon-btn svg,
+    .mobile-bottom-btn svg {
+      width: 22px;
+      height: 22px;
+      stroke: currentColor;
+      stroke-width: 2.4;
+      fill: none;
+    }
+
+    .mobile-title-btn:active,
+    .mobile-icon-btn:active,
+    .mobile-bottom-btn:active {
+      transform: scale(.96);
+    }
+
+    .mobile-search-panel {
+      display: none;
+      margin-top: 10px;
+      pointer-events: auto;
+    }
+
+    .mobile-search-panel.open {
+      display: block;
+    }
+
+    .mobile-search-input {
+      width: 100%;
+      height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 0 16px;
+      background: rgba(255, 255, 255, .96);
+      outline: 0;
+      font-size: 16px;
+    }
+
+    .mobile-search-results {
+      margin-top: 8px;
+      display: grid;
+      gap: 6px;
+      max-height: 42vh;
+      overflow: auto;
+    }
+
+    .mobile-search-result {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, .96);
+      padding: 10px 12px;
+      text-align: left;
+      display: grid;
+      gap: 4px;
+    }
+
+    .mobile-search-result strong {
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .mobile-search-result span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .mobile-content {
+      height: 100dvh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: calc(max(76px, env(safe-area-inset-top)) + 20px) 14px calc(88px + env(safe-area-inset-bottom));
+      background: #f8fafc;
+    }
+
+    .mobile-content.mobile-leaving {
+      opacity: .35;
+      transform: translateY(8px);
+      transition: opacity .12s ease, transform .12s ease;
+    }
+
+    .mobile-content.mobile-entering {
+      animation: mobileViewEnter .22s cubic-bezier(.2, .8, .2, 1);
+    }
+
+    @keyframes mobileViewEnter {
+      from { opacity: .12; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .mobile-day-card {
+      min-height: calc(100dvh - 180px);
+      border: 1px solid rgba(203, 213, 225, .75);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, .92);
+      box-shadow: 0 16px 38px rgba(31, 41, 51, .08);
+      padding: 14px;
+      display: grid;
+      align-content: start;
+      gap: 12px;
+    }
+
+    .mobile-day-title {
+      display: grid;
+      gap: 2px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(203, 213, 225, .62);
+    }
+
+    .mobile-day-title strong {
+      font-size: 21px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    .mobile-day-title span {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .mobile-day-card .task-list,
+    .mobile-day-card .day-notes {
+      gap: 8px;
+    }
+
+    .mobile-day-card .task,
+    .mobile-day-card .day-note {
+      min-height: 44px;
+      touch-action: manipulation;
+    }
+
+    .mobile-empty {
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+      padding: 18px 12px;
+      text-align: center;
+      font-size: 14px;
+      background: rgba(248, 250, 252, .8);
+    }
+
+    .mobile-month-stack,
+    .mobile-year-stack {
+      display: grid;
+      gap: 28px;
+    }
+
+    .mobile-month-block,
+    .mobile-year-section {
+      border-radius: 18px;
+      background: rgba(255, 255, 255, .94);
+      border: 1px solid rgba(203, 213, 225, .72);
+      box-shadow: 0 12px 32px rgba(31, 41, 51, .07);
+      padding: 14px;
+    }
+
+    .mobile-month-block h2,
+    .mobile-year-title {
+      margin: 0 0 12px;
+      font-size: 30px;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .mobile-month-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 8px 5px;
+    }
+
+    .mobile-month-cell {
+      min-height: 78px;
+      border: 0;
+      border-radius: 12px;
+      background: transparent;
+      padding: 5px 3px;
+      display: grid;
+      align-content: start;
+      gap: 2px;
+      text-align: center;
+    }
+
+    .mobile-month-cell.other { opacity: .28; }
+
+    .mobile-month-cell.today .daynum,
+    .mobile-year-day.today {
+      background: #ef4444;
+      color: #fff;
+      border-radius: 999px;
+    }
+
+    .mobile-month-cell .daynum {
+      width: 30px;
+      height: 30px;
+      margin: 0 auto;
+      display: grid;
+      place-items: center;
+      font-size: 20px;
+      font-weight: 840;
+    }
+
+    .mobile-month-cell .lunar {
+      color: var(--muted);
+      font-size: 11px;
+      min-height: 14px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .mobile-summary-lines {
+      display: grid;
+      gap: 3px;
+      min-height: 18px;
+      margin-top: 2px;
+    }
+
+    .mobile-summary-line {
+      height: 5px;
+      border-radius: 999px;
+      background: #bfdbfe;
+    }
+
+    .mobile-summary-line.high { background: #fecdd3; }
+    .mobile-summary-line.urgent { background: #991b1b; }
+    .mobile-summary-more {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 760;
+    }
+
+    .mobile-year-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 22px 16px;
+    }
+
+    .mobile-year-month {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      text-align: left;
+    }
+
+    .mobile-year-month h3 {
+      margin: 0 0 8px;
+      font-size: 21px;
+      line-height: 1;
+    }
+
+    .mobile-year-month.current h3 { color: #ef4444; }
+
+    .mobile-year-days {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 5px 4px;
+    }
+
+    .mobile-year-day {
+      width: 16px;
+      height: 16px;
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      font-weight: 780;
+    }
+
+    .mobile-highlight {
+      animation: mobilePulse 1.4s ease;
+    }
+
+    @keyframes mobilePulse {
+      0%, 100% { box-shadow: none; }
+      35% { box-shadow: 0 0 0 4px rgba(37, 99, 235, .18); }
+    }
+
+    .mobile-bottom {
+      bottom: 0;
+      padding: 10px 18px calc(12px + env(safe-area-inset-bottom));
+      background: linear-gradient(0deg, rgba(248, 250, 252, .98), rgba(248, 250, 252, .68), rgba(248, 250, 252, 0));
+    }
+
+    .mobile-bottom-btn {
+      padding: 0 18px;
+      font-size: 18px;
+      font-weight: 820;
+    }
+
+    .mobile-bottom-btn.icon {
+      width: 54px;
+      padding: 0;
+    }
+
     @media (max-width: 1040px) {
       .topbar {
         grid-template-columns: 1fr auto;
@@ -1705,38 +2072,18 @@
     }
 
     @media (max-width: 720px) {
-      :root { --topbar-h: auto; }
-      .topbar {
-        position: static;
-        grid-template-columns: 1fr;
-        padding: 14px;
+      body {
+        overflow: hidden;
+        background: #f8fafc;
       }
-      .topbar-left, .month-nav, .actions { justify-content: space-between; }
-      .topbar-left { gap: 12px; }
-      .filters { grid-template-columns: 1fr; }
-      .weekday { display: none; }
-      .calendar { padding: 0 12px 24px; }
-      .week {
+      .topbar,
+      .weekday,
+      .calendar {
+        display: none;
+      }
+      .mobile-shell {
         display: block;
-        border: 0;
-        background: transparent;
       }
-      .day {
-        min-height: auto;
-        margin: 10px 0;
-        border: 1px solid var(--line);
-        border-radius: var(--radius);
-        box-shadow: 0 1px 2px rgba(31, 41, 51, .04);
-      }
-      .day.other-month {
-        opacity: .7;
-      }
-      .day.is-today {
-        box-shadow: inset 0 0 0 2px var(--primary), 0 8px 22px rgba(37, 99, 235, .12);
-      }
-      .date-week { display: inline; }
-      .date-extra { margin-top: 0; }
-      .empty-hint { opacity: 1; }
       .modal-row { grid-template-columns: 1fr; }
       .settings-two { grid-template-columns: 1fr; }
       .special-editor { grid-template-columns: 1fr 1fr; }
@@ -1799,6 +2146,32 @@
     <div id="weeks"></div>
     <div class="sentinel" id="bottomSentinel"></div>
   </main>
+
+  <section class="mobile-shell" id="mobileShell" aria-label="移动端待办">
+    <div class="mobile-top">
+      <div class="mobile-toolbar">
+        <button class="mobile-title-btn" id="mobileTitleBtn" type="button" aria-label="切换到上级视图">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg>
+          <span>6月</span>
+        </button>
+        <div class="mobile-actions">
+          <button class="mobile-icon-btn" id="mobileSearchBtn" type="button" title="搜索" aria-label="搜索"></button>
+          <button class="mobile-icon-btn" id="mobileAddBtn" type="button" title="新增任务" aria-label="新增任务"></button>
+        </div>
+      </div>
+      <div class="mobile-search-panel" id="mobileSearchPanel">
+        <input class="mobile-search-input" id="mobileSearchInput" type="search" placeholder="搜索所有任务" autocomplete="off" />
+        <div class="mobile-search-results" id="mobileSearchResults"></div>
+      </div>
+    </div>
+    <div class="mobile-content" id="mobileContent"></div>
+    <div class="mobile-bottom">
+      <div class="mobile-bottom-inner">
+        <button class="mobile-bottom-btn" id="mobileTodayBtn" type="button">今天</button>
+        <button class="mobile-bottom-btn icon" id="mobileMineBtn" type="button" title="我的" aria-label="我的"></button>
+      </div>
+    </div>
+  </section>
 
   <div class="modal-backdrop" id="modalBackdrop">
     <form class="modal" id="taskForm">
@@ -2199,6 +2572,21 @@
     let viewState = null;
     let restoringViewState = false;
     let activeCategory = "work";
+    let mobileViewMode = "day";
+    let mobileSelectedDate = toKey(new Date());
+    let mobileSearchOpen = false;
+    let mobileTransitionTimer = null;
+    let mobileScrollTimer = null;
+    let mobileRangePollTimer = null;
+    let mobileMonthStartOffset = -12;
+    let mobileMonthEndOffset = 12;
+    let mobileYearStartOffset = -10;
+    let mobileYearEndOffset = 10;
+    let mobileRangeExpanding = false;
+    let suppressMobileFocus = false;
+    let resetMobileContentScrollOnRender = false;
+    let pendingMobileHighlightId = null;
+    let mobileSortDrag = null;
 
     const els = {
       monthLabel: document.getElementById("monthLabel"),
@@ -2207,6 +2595,16 @@
       bottomSentinel: document.getElementById("bottomSentinel"),
       accountStatus: document.getElementById("accountStatus"),
       searchInput: document.getElementById("searchInput"),
+      mobileShell: document.getElementById("mobileShell"),
+      mobileTitleBtn: document.getElementById("mobileTitleBtn"),
+      mobileSearchBtn: document.getElementById("mobileSearchBtn"),
+      mobileAddBtn: document.getElementById("mobileAddBtn"),
+      mobileMineBtn: document.getElementById("mobileMineBtn"),
+      mobileSearchPanel: document.getElementById("mobileSearchPanel"),
+      mobileSearchInput: document.getElementById("mobileSearchInput"),
+      mobileSearchResults: document.getElementById("mobileSearchResults"),
+      mobileContent: document.getElementById("mobileContent"),
+      mobileTodayBtn: document.getElementById("mobileTodayBtn"),
       categoryToggle: document.getElementById("categoryToggle"),
       desktopSearch: document.getElementById("desktopSearch"),
       searchToggleBtn: document.getElementById("searchToggleBtn"),
@@ -2318,6 +2716,15 @@
       document.getElementById("currentMonthBtn").addEventListener("click", goCurrentMonth);
       document.getElementById("todayBtn").addEventListener("click", goToday);
       document.getElementById("newTaskBtn").addEventListener("click", () => openModal(toKey(new Date())));
+      els.mobileTitleBtn.addEventListener("click", handleMobileTitleClick);
+      els.mobileSearchBtn.addEventListener("click", toggleMobileSearch);
+      els.mobileAddBtn.addEventListener("click", () => openModal(mobileSelectedDate));
+      els.mobileMineBtn.addEventListener("click", openAuth);
+      els.mobileTodayBtn.addEventListener("click", goMobileToday);
+      els.mobileSearchInput.addEventListener("input", renderMobileSearchResults);
+      els.mobileContent.addEventListener("scroll", throttle(handleMobileContentScroll, 120));
+      els.mobileContent.addEventListener("touchend", () => setTimeout(handleMobileContentScroll, 140), { passive: true });
+      els.mobileContent.addEventListener("pointerdown", handleMobileSortPointerDown);
       document.getElementById("settingsBtn").addEventListener("click", openSettings);
       els.accountStatus.addEventListener("click", openAuth);
       document.getElementById("cancelBtn").addEventListener("click", closeModal);
@@ -2401,12 +2808,474 @@
         updateMonthFromScroll();
         saveCurrentViewState();
       }, 160));
-      window.addEventListener("resize", throttle(updateMonthFromScroll, 120));
+      window.addEventListener("resize", throttle(() => {
+        updateMonthFromScroll();
+        renderMobile();
+      }, 120));
       window.addEventListener("pagehide", saveCurrentViewStateImmediate);
       window.addEventListener("beforeunload", saveCurrentViewStateImmediate);
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "hidden") saveCurrentViewStateImmediate();
       });
+    }
+
+    function isMobileViewport() {
+      return window.matchMedia("(max-width: 720px)").matches;
+    }
+
+    function renderMobile() {
+      if (!els.mobileShell) return;
+      if (!isDateKey(mobileSelectedDate)) mobileSelectedDate = toKey(new Date());
+      const selected = parseKey(mobileSelectedDate);
+      updateMobileHeader(selected);
+      if (mobileViewMode === "year") {
+        els.mobileContent.innerHTML = renderMobileYear(selected.getFullYear());
+      } else if (mobileViewMode === "month") {
+        els.mobileContent.innerHTML = renderMobileMonthStack(selected.getFullYear(), selected.getMonth());
+      } else {
+        els.mobileContent.innerHTML = renderMobileDayCard(mobileSelectedDate);
+      }
+      if (resetMobileContentScrollOnRender) {
+        els.mobileContent.scrollTop = 0;
+        resetMobileContentScrollOnRender = false;
+      }
+      if (mobileSearchOpen) renderMobileSearchResults();
+      updateMobileRangePoll();
+      if (!suppressMobileFocus) scheduleMobileContentFocus();
+      requestAnimationFrame(() => {
+        if (!pendingMobileHighlightId) return;
+        const item = els.mobileContent.querySelector(`[data-task-id="${pendingMobileHighlightId}"]`);
+        if (item) {
+          item.classList.add("mobile-highlight");
+          item.scrollIntoView({ block: "center", behavior: "smooth" });
+        }
+        pendingMobileHighlightId = null;
+      });
+    }
+
+    function renderMobileAnimated() {
+      if (!els.mobileContent || !isMobileViewport()) {
+        renderMobile();
+        return;
+      }
+      clearTimeout(mobileTransitionTimer);
+      els.mobileContent.classList.remove("mobile-entering");
+      els.mobileContent.classList.add("mobile-leaving");
+      mobileTransitionTimer = setTimeout(() => {
+        renderMobile();
+        focusMobileContentAnchor();
+        setTimeout(focusMobileContentAnchor, 180);
+        els.mobileContent.classList.remove("mobile-leaving");
+        void els.mobileContent.offsetWidth;
+        els.mobileContent.classList.add("mobile-entering");
+        mobileTransitionTimer = setTimeout(() => {
+          els.mobileContent.classList.remove("mobile-entering");
+        }, 260);
+      }, 105);
+    }
+
+    function updateMobileHeader(date) {
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const label = mobileViewMode === "year" ? `${year}年` : mobileViewMode === "month" ? `${year}年` : `${month}月`;
+      els.mobileTitleBtn.querySelector("span").textContent = label;
+      els.mobileTitleBtn.disabled = mobileViewMode === "year";
+      els.mobileSearchBtn.innerHTML = mobileIcon("search");
+      els.mobileSearchBtn.classList.toggle("active", mobileSearchOpen);
+      els.mobileAddBtn.innerHTML = mobileIcon("plus");
+      els.mobileMineBtn.innerHTML = mobileIcon("user");
+      els.mobileSearchPanel.classList.toggle("open", mobileSearchOpen);
+    }
+
+    function mobileIcon(name) {
+      const icons = {
+        search: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"></circle><path d="m16 16 4 4"></path></svg>',
+        plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>',
+        user: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"></path><path d="M4 21a8 8 0 0 1 16 0"></path></svg>'
+      };
+      return icons[name] || icons.search;
+    }
+
+    function renderMobileDayCard(dateKey) {
+      const date = parseKey(dateKey);
+      const tasksForDay = getMobileTasksForDate(dateKey);
+      const notesForDay = getMobileNotesForDate(dateKey);
+      const lunar = getLunarInfo(date)?.display || "";
+      const title = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 · ${["周日","周一","周二","周三","周四","周五","周六"][date.getDay()]}`;
+      const empty = !tasksForDay.length && !notesForDay.length ? '<div class="mobile-empty">当天暂无任务</div>' : "";
+      return `<section class="mobile-day-card" data-mobile-date="${dateKey}">
+        <div class="mobile-day-title">
+          <strong>${title}</strong>
+          <span>${escapeHtml(lunar)}</span>
+        </div>
+        <div class="task-list" data-date="${dateKey}">
+          ${tasksForDay.map(renderTask).join("")}
+          ${empty}
+        </div>
+        ${renderDayNotes(dateKey, notesForDay)}
+      </section>`;
+    }
+
+    function renderMobileMonthStack(year, month) {
+      const months = [];
+      for (let offset = mobileMonthStartOffset; offset <= mobileMonthEndOffset; offset++) {
+        const date = new Date(year, month + offset, 1);
+        months.push(renderMobileMonth(date.getFullYear(), date.getMonth()));
+      }
+      return `<div class="mobile-month-stack">${months.join("")}</div>`;
+    }
+
+    function renderMobileMonth(year, month) {
+      const start = getMonday(new Date(year, month, 1));
+      const dates = [];
+      const cursor = new Date(start);
+      for (let i = 0; i < 42; i++) {
+        dates.push(new Date(cursor));
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      return `<section class="mobile-month-block" data-mobile-month="${year}-${month}">
+        <h2>${month + 1}月</h2>
+        <div class="mobile-month-grid">
+          ${dates.map(date => renderMobileMonthCell(date, month)).join("")}
+        </div>
+      </section>`;
+    }
+
+    function renderMobileMonthCell(date, visibleMonth) {
+      const key = toKey(date);
+      const tasksForDay = getMobileTasksForDate(key);
+      const notesForDay = getMobileNotesForDate(key);
+      const count = tasksForDay.length + notesForDay.length;
+      const lines = tasksForDay.slice(0, 3).map(task => {
+        const priority = normalizePriority(task.priority);
+        return `<span class="mobile-summary-line ${priority === "normal" ? "" : priority}"></span>`;
+      }).join("");
+      const more = count > 3 ? `<span class="mobile-summary-more">+${count - 3}</span>` : "";
+      return `<button class="mobile-month-cell ${date.getMonth() !== visibleMonth ? "other" : ""} ${isToday(date) ? "today" : ""}" type="button" onclick="setMobileDate('${key}','day')">
+        <span class="daynum">${date.getDate()}</span>
+        <span class="lunar">${escapeHtml(getLunarInfo(date)?.display || "")}</span>
+        <span class="mobile-summary-lines">${lines}${more}</span>
+      </button>`;
+    }
+
+    function renderMobileYear(year) {
+      const years = [];
+      for (let current = year + mobileYearStartOffset; current <= year + mobileYearEndOffset; current++) {
+        years.push(`<section class="mobile-year-section" data-mobile-year="${current}">
+          <h2 class="mobile-year-title">${current}年</h2>
+          <div class="mobile-year-grid">
+            ${Array.from({ length: 12 }, (_, month) => renderMobileYearMonth(current, month)).join("")}
+          </div>
+        </section>`);
+      }
+      return `<div class="mobile-year-stack">${years.join("")}</div>`;
+    }
+
+    function renderMobileYearMonth(year, month) {
+      const today = new Date();
+      const current = today.getFullYear() === year && today.getMonth() === month;
+      const last = new Date(year, month + 1, 0).getDate();
+      const blanks = (new Date(year, month, 1).getDay() + 6) % 7;
+      const cells = [
+        ...Array.from({ length: blanks }, () => '<span></span>'),
+        ...Array.from({ length: last }, (_, index) => {
+          const date = new Date(year, month, index + 1);
+          return `<span class="mobile-year-day ${isToday(date) ? "today" : ""}">${index + 1}</span>`;
+        })
+      ].join("");
+      return `<button class="mobile-year-month ${current ? "current" : ""}" type="button" onclick="setMobileMonth(${year},${month})">
+        <h3>${month + 1}月</h3>
+        <div class="mobile-year-days">${cells}</div>
+      </button>`;
+    }
+
+    function focusMobileContentAnchor() {
+      if (!isMobileViewport() || !els.mobileContent) return;
+      const selected = parseKey(mobileSelectedDate);
+      let target = null;
+      if (mobileViewMode === "month") {
+        target = els.mobileContent.querySelector(`[data-mobile-month="${selected.getFullYear()}-${selected.getMonth()}"]`);
+      } else if (mobileViewMode === "year") {
+        target = els.mobileContent.querySelector(`[data-mobile-year="${selected.getFullYear()}"]`);
+      }
+      if (target) animateMobileContentScroll(Math.max(0, target.offsetTop - 18));
+    }
+
+    function animateMobileContentScroll(top) {
+      if (!els.mobileContent) return;
+      clearInterval(mobileScrollTimer);
+      const start = els.mobileContent.scrollTop;
+      const change = top - start;
+      if (Math.abs(change) < 2) {
+        els.mobileContent.scrollTop = top;
+        return;
+      }
+      const startedAt = Date.now();
+      const duration = 320;
+      mobileScrollTimer = setInterval(() => {
+        const progress = Math.min(1, (Date.now() - startedAt) / duration);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        els.mobileContent.scrollTop = start + change * eased;
+        if (progress >= 1) clearInterval(mobileScrollTimer);
+      }, 16);
+    }
+
+    function scheduleMobileContentFocus() {
+      if (mobileViewMode !== "month" && mobileViewMode !== "year") return;
+      setTimeout(focusMobileContentAnchor, 140);
+      setTimeout(focusMobileContentAnchor, 420);
+    }
+
+    function resetMobileRange(mode) {
+      if (mode === "month") {
+        mobileMonthStartOffset = -12;
+        mobileMonthEndOffset = 12;
+      } else if (mode === "year") {
+        mobileYearStartOffset = -10;
+        mobileYearEndOffset = 10;
+      }
+    }
+
+    function handleMobileContentScroll() {
+      if (!isMobileViewport() || mobileRangeExpanding || !els.mobileContent) return;
+      if (mobileViewMode !== "month" && mobileViewMode !== "year") return;
+      const content = els.mobileContent;
+      const nearTop = content.scrollTop < 260;
+      const nearBottom = content.scrollHeight - content.scrollTop - content.clientHeight < 520;
+      if (!nearTop && !nearBottom) return;
+      const beforeHeight = content.scrollHeight;
+      const beforeTop = content.scrollTop;
+      let changed = false;
+      if (mobileViewMode === "month") {
+        if (nearTop) { mobileMonthStartOffset -= 12; changed = true; }
+        if (nearBottom) { mobileMonthEndOffset += 12; changed = true; }
+      } else {
+        if (nearTop) { mobileYearStartOffset -= 10; changed = true; }
+        if (nearBottom) { mobileYearEndOffset += 10; changed = true; }
+      }
+      if (!changed) return;
+      mobileRangeExpanding = true;
+      suppressMobileFocus = true;
+      renderMobile();
+      suppressMobileFocus = false;
+      content.scrollTop = nearTop ? beforeTop + (content.scrollHeight - beforeHeight) : beforeTop;
+      mobileRangeExpanding = false;
+    }
+
+    function updateMobileRangePoll() {
+      clearInterval(mobileRangePollTimer);
+      if (mobileViewMode === "month" || mobileViewMode === "year") {
+        mobileRangePollTimer = setInterval(handleMobileContentScroll, 320);
+      }
+    }
+
+    function setMobileDate(dateKey, mode = "day") {
+      if (!isDateKey(dateKey)) return;
+      mobileSelectedDate = dateKey;
+      mobileViewMode = mode;
+      if (mode === "month" || mode === "year") resetMobileRange(mode);
+      resetMobileContentScrollOnRender = true;
+      renderMobileAnimated();
+    }
+
+    function setMobileMonth(year, month) {
+      mobileSelectedDate = toKey(new Date(year, month, 1));
+      mobileViewMode = "month";
+      resetMobileRange("month");
+      resetMobileContentScrollOnRender = true;
+      renderMobileAnimated();
+    }
+
+    function handleMobileTitleClick() {
+      if (mobileViewMode === "day") {
+        mobileViewMode = "month";
+        resetMobileRange("month");
+        resetMobileContentScrollOnRender = true;
+      } else if (mobileViewMode === "month") {
+        mobileViewMode = "year";
+        resetMobileRange("year");
+        resetMobileContentScrollOnRender = true;
+      }
+      renderMobileAnimated();
+    }
+
+    function toggleMobileSearch() {
+      mobileSearchOpen = !mobileSearchOpen;
+      updateMobileHeader(parseKey(mobileSelectedDate));
+      if (mobileSearchOpen) {
+        els.mobileSearchInput.focus();
+        renderMobileSearchResults();
+      }
+    }
+
+    function goMobileToday() {
+      const today = toKey(new Date());
+      const previousMode = mobileViewMode;
+      mobileSelectedDate = today;
+      if (previousMode === "year") {
+        mobileViewMode = "month";
+        resetMobileRange("month");
+      } else {
+        mobileViewMode = "day";
+      }
+      resetMobileContentScrollOnRender = true;
+      renderMobileAnimated();
+    }
+
+    function renderMobileSearchResults() {
+      const query = els.mobileSearchInput.value.trim().toLowerCase();
+      if (!query) {
+        els.mobileSearchResults.innerHTML = '<div class="mobile-empty">输入关键词搜索任务</div>';
+        return;
+      }
+      const results = tasks
+        .filter(task => taskMatchesMobileQuery(task, query))
+        .sort((a, b) => a.date.localeCompare(b.date) || taskOrder(a, b))
+        .slice(0, 30);
+      els.mobileSearchResults.innerHTML = results.length ? results.map(task => {
+        const cat = getCategory(task.category);
+        const priority = normalizePriority(task.priority);
+        const priorityText = priority === "normal" ? "" : ` · ${PRIORITIES[priority].name}`;
+        return `<button class="mobile-search-result" type="button" onclick="jumpMobileSearchResult('${task.id}')">
+          <strong>${escapeHtml(task.title)}</strong>
+          <span>${task.date} · ${escapeHtml(cat.name)}${priorityText}</span>
+        </button>`;
+      }).join("") : '<div class="mobile-empty">没有匹配任务</div>';
+    }
+
+    function jumpMobileSearchResult(taskId) {
+      const task = tasks.find(item => item.id === taskId);
+      if (!task) return;
+      mobileSelectedDate = task.date;
+      mobileViewMode = "day";
+      mobileSearchOpen = false;
+      els.mobileSearchInput.value = "";
+      pendingMobileHighlightId = taskId;
+      resetMobileContentScrollOnRender = true;
+      renderMobileAnimated();
+    }
+
+    function taskMatchesMobileQuery(task, query) {
+      return task.title.toLowerCase().includes(query)
+        || (task.note || "").toLowerCase().includes(query)
+        || getTaskBlocks(task).some(block => block.type === "text" && block.text.toLowerCase().includes(query));
+    }
+
+    function getMobileTasksForDate(dateKey) {
+      return tasks.filter(task => task.date === dateKey).sort(taskOrder);
+    }
+
+    function getMobileNotesForDate(dateKey) {
+      return dayNotes.filter(note => note.date === dateKey).sort(noteOrder);
+    }
+
+    function handleMobileSortPointerDown(event) {
+      if (!isMobileViewport() || mobileViewMode !== "day" || event.button !== 0) return;
+      const task = event.target.closest(".task");
+      if (!task || event.target.closest("button, input, select, textarea")) return;
+      const taskId = task.dataset.taskId;
+      const dateKey = task.dataset.taskDate;
+      if (!taskId || !dateKey) return;
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const timer = setTimeout(() => beginMobileSortDrag(task, taskId, dateKey, startX, startY, event.pointerId), 360);
+      const cancel = moveEvent => {
+        if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) > 8) cleanup();
+      };
+      const cleanup = () => {
+        clearTimeout(timer);
+        document.removeEventListener("pointermove", cancel);
+        document.removeEventListener("pointerup", cleanup);
+        document.removeEventListener("pointercancel", cleanup);
+      };
+      document.addEventListener("pointermove", cancel);
+      document.addEventListener("pointerup", cleanup, { once: true });
+      document.addEventListener("pointercancel", cleanup, { once: true });
+    }
+
+    function beginMobileSortDrag(taskEl, taskId, dateKey, x, y, pointerId) {
+      if (mobileSortDrag) return;
+      const rect = taskEl.getBoundingClientRect();
+      const preview = taskEl.cloneNode(true);
+      preview.classList.add("drag-preview");
+      preview.style.width = `${rect.width}px`;
+      preview.style.height = `${rect.height}px`;
+      document.body.appendChild(preview);
+      taskEl.classList.add("dragging");
+      mobileSortDrag = { taskEl, taskId, dateKey, preview, offsetX: x - rect.left, offsetY: y - rect.top, targetId: null };
+      moveMobileSortPreview(x, y);
+      document.body.classList.add("dragging-task");
+      document.addEventListener("pointermove", handleMobileSortMove);
+      document.addEventListener("pointerup", finishMobileSortDrag, { once: true });
+      document.addEventListener("pointercancel", cancelMobileSortDrag, { once: true });
+      try { taskEl.setPointerCapture(pointerId); } catch {}
+      showToast("拖动调整顺序");
+    }
+
+    function handleMobileSortMove(event) {
+      if (!mobileSortDrag) return;
+      event.preventDefault();
+      moveMobileSortPreview(event.clientX, event.clientY);
+      const list = els.mobileContent.querySelector(`.task-list[data-date="${mobileSortDrag.dateKey}"]`);
+      if (!list) return;
+      const siblings = Array.from(list.querySelectorAll(".task:not(.dragging)"));
+      let beforeId = null;
+      for (const item of siblings) {
+        const rect = item.getBoundingClientRect();
+        if (event.clientY < rect.top + rect.height / 2) {
+          beforeId = item.dataset.taskId;
+          break;
+        }
+      }
+      mobileSortDrag.targetId = beforeId;
+      document.querySelectorAll(".drop-marker").forEach(el => el.remove());
+      const marker = document.createElement("div");
+      marker.className = "drop-marker";
+      if (beforeId) list.querySelector(`[data-task-id="${beforeId}"]`)?.before(marker);
+      else list.appendChild(marker);
+    }
+
+    function moveMobileSortPreview(x, y) {
+      if (!mobileSortDrag) return;
+      mobileSortDrag.preview.style.transform = `translate3d(${x - mobileSortDrag.offsetX}px, ${y - mobileSortDrag.offsetY}px, 0)`;
+    }
+
+    function finishMobileSortDrag() {
+      if (!mobileSortDrag) return;
+      const drag = mobileSortDrag;
+      const beforeId = drag.targetId;
+      cleanupMobileSortDrag();
+      reorderTaskWithinDate(drag.taskId, drag.dateKey, beforeId);
+    }
+
+    function cancelMobileSortDrag() {
+      cleanupMobileSortDrag();
+    }
+
+    function cleanupMobileSortDrag() {
+      if (!mobileSortDrag) return;
+      mobileSortDrag.taskEl.classList.remove("dragging");
+      mobileSortDrag.preview.remove();
+      document.body.classList.remove("dragging-task");
+      document.querySelectorAll(".drop-marker").forEach(el => el.remove());
+      document.removeEventListener("pointermove", handleMobileSortMove);
+      mobileSortDrag = null;
+    }
+
+    function reorderTaskWithinDate(taskId, dateKey, beforeId) {
+      const ordered = tasks.filter(task => task.date === dateKey && task.id !== taskId).sort(taskOrder);
+      const moved = tasks.find(task => task.id === taskId);
+      if (!moved) return;
+      const index = beforeId ? Math.max(0, ordered.findIndex(task => task.id === beforeId)) : ordered.length;
+      ordered.splice(index < 0 ? ordered.length : index, 0, moved);
+      ordered.forEach((task, order) => {
+        task.sortIndex = order + 1;
+      });
+      saveLocalSnapshot();
+      renderVisibleWeeks();
+      renderMobile();
+      queueCloudSave();
+      showToast("顺序已更新");
     }
 
     function renderSelects() {
@@ -2431,6 +3300,7 @@
       els.weeks.innerHTML = weeks.map(renderWeek).join("");
       updateMonthFromScroll();
       updateTaskTitleOverflow();
+      renderMobile();
     }
 
     function renderVisibleWeeks() {
@@ -2440,6 +3310,7 @@
       });
       updateMonthFromScroll();
       updateTaskTitleOverflow();
+      renderMobile();
     }
 
     function renderWeek(dates) {
@@ -2619,6 +3490,7 @@
     }
 
     function handlePointerDragStart(event) {
+      if (isMobileViewport()) return;
       beginUnifiedDrag(event, "pointer");
     }
 
