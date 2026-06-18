@@ -1826,7 +1826,7 @@
       height: 100dvh;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
-      padding: calc(max(76px, env(safe-area-inset-top)) + 20px) 14px calc(88px + env(safe-area-inset-bottom));
+      padding: calc(max(158px, env(safe-area-inset-top)) + 18px) 14px calc(88px + env(safe-area-inset-bottom));
       background: #f8fafc;
     }
 
@@ -1884,7 +1884,9 @@
     .mobile-day-card .task,
     .mobile-day-card .day-note {
       min-height: 44px;
-      touch-action: manipulation;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
     .mobile-empty {
@@ -1895,6 +1897,59 @@
       text-align: center;
       font-size: 14px;
       background: rgba(248, 250, 252, .8);
+    }
+
+    .mobile-date-strip {
+      margin: 10px -2px 0;
+      padding: 0 2px 4px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      scroll-snap-type: x proximity;
+      scrollbar-width: none;
+      pointer-events: auto;
+    }
+
+    .mobile-date-strip::-webkit-scrollbar {
+      display: none;
+    }
+
+    .mobile-date-btn {
+      flex: 0 0 54px;
+      min-height: 62px;
+      border: 0;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, .78);
+      color: #111827;
+      display: grid;
+      place-items: center;
+      gap: 1px;
+      scroll-snap-align: center;
+    }
+
+    .mobile-date-btn .dow,
+    .mobile-date-btn .lunar {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .mobile-date-btn .num {
+      font-size: 22px;
+      font-weight: 860;
+      line-height: 1;
+    }
+
+    .mobile-date-btn.active {
+      background: #2563eb;
+      color: #fff;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, .24);
+    }
+
+    .mobile-date-btn.active .dow,
+    .mobile-date-btn.active .lunar {
+      color: rgba(255, 255, 255, .86);
     }
 
     .mobile-month-stack,
@@ -1990,7 +2045,8 @@
     .mobile-year-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 22px 16px;
+      gap: 24px 18px;
+      align-items: start;
     }
 
     .mobile-year-month {
@@ -1998,6 +2054,8 @@
       background: transparent;
       padding: 0;
       text-align: left;
+      width: 100%;
+      min-width: 0;
     }
 
     .mobile-year-month h3 {
@@ -2010,8 +2068,11 @@
 
     .mobile-year-days {
       display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 5px 4px;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      grid-auto-rows: 16px;
+      gap: 5px 3px;
+      align-items: center;
+      justify-items: center;
     }
 
     .mobile-year-day {
@@ -2047,6 +2108,14 @@
     .mobile-bottom-btn.icon {
       width: 54px;
       padding: 0;
+    }
+
+    .mobile-shell.mobile-year-mode .mobile-title-btn {
+      display: none;
+    }
+
+    .mobile-shell.mobile-year-mode .mobile-toolbar {
+      justify-content: flex-end;
     }
 
     @media (max-width: 1040px) {
@@ -2163,6 +2232,7 @@
         <input class="mobile-search-input" id="mobileSearchInput" type="search" placeholder="搜索所有任务" autocomplete="off" />
         <div class="mobile-search-results" id="mobileSearchResults"></div>
       </div>
+      <div class="mobile-date-strip" id="mobileDateStrip" aria-label="日期切换"></div>
     </div>
     <div class="mobile-content" id="mobileContent"></div>
     <div class="mobile-bottom">
@@ -2603,6 +2673,7 @@
       mobileSearchPanel: document.getElementById("mobileSearchPanel"),
       mobileSearchInput: document.getElementById("mobileSearchInput"),
       mobileSearchResults: document.getElementById("mobileSearchResults"),
+      mobileDateStrip: document.getElementById("mobileDateStrip"),
       mobileContent: document.getElementById("mobileContent"),
       mobileTodayBtn: document.getElementById("mobileTodayBtn"),
       categoryToggle: document.getElementById("categoryToggle"),
@@ -2828,6 +2899,7 @@
       if (!isDateKey(mobileSelectedDate)) mobileSelectedDate = toKey(new Date());
       const selected = parseKey(mobileSelectedDate);
       updateMobileHeader(selected);
+      els.mobileDateStrip.innerHTML = mobileViewMode === "day" ? renderMobileDateStrip(selected) : "";
       if (mobileViewMode === "year") {
         els.mobileContent.innerHTML = renderMobileYear(selected.getFullYear());
       } else if (mobileViewMode === "month") {
@@ -2842,6 +2914,7 @@
       if (mobileSearchOpen) renderMobileSearchResults();
       updateMobileRangePoll();
       if (!suppressMobileFocus) scheduleMobileContentFocus();
+      requestAnimationFrame(focusMobileDateStrip);
       requestAnimationFrame(() => {
         if (!pendingMobileHighlightId) return;
         const item = els.mobileContent.querySelector(`[data-task-id="${pendingMobileHighlightId}"]`);
@@ -2880,6 +2953,7 @@
       const label = mobileViewMode === "year" ? `${year}年` : mobileViewMode === "month" ? `${year}年` : `${month}月`;
       els.mobileTitleBtn.querySelector("span").textContent = label;
       els.mobileTitleBtn.disabled = mobileViewMode === "year";
+      els.mobileShell.classList.toggle("mobile-year-mode", mobileViewMode === "year");
       els.mobileSearchBtn.innerHTML = mobileIcon("search");
       els.mobileSearchBtn.classList.toggle("active", mobileSearchOpen);
       els.mobileAddBtn.innerHTML = mobileIcon("plus");
@@ -2894,6 +2968,31 @@
         user: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"></path><path d="M4 21a8 8 0 0 1 16 0"></path></svg>'
       };
       return icons[name] || icons.search;
+    }
+
+    function renderMobileDateStrip(selected) {
+      const dates = [];
+      for (let offset = -10; offset <= 10; offset++) {
+        const date = new Date(selected);
+        date.setDate(date.getDate() + offset);
+        dates.push(date);
+      }
+      return dates.map(date => {
+        const key = toKey(date);
+        const lunar = getLunarInfo(date)?.display || "";
+        const dow = ["日","一","二","三","四","五","六"][date.getDay()];
+        return `<button class="mobile-date-btn ${key === mobileSelectedDate ? "active" : ""}" type="button" data-mobile-date="${key}" onclick="setMobileDate('${key}','day')">
+          <span class="dow">${dow}</span>
+          <span class="num">${date.getDate()}</span>
+          <span class="lunar">${escapeHtml(lunar)}</span>
+        </button>`;
+      }).join("");
+    }
+
+    function focusMobileDateStrip() {
+      if (!els.mobileDateStrip || mobileViewMode !== "day") return;
+      const active = els.mobileDateStrip.querySelector(".mobile-date-btn.active");
+      if (active) active.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
     }
 
     function renderMobileDayCard(dateKey) {
@@ -3178,15 +3277,21 @@
       if (!taskId || !dateKey) return;
       const startX = event.clientX;
       const startY = event.clientY;
-      const timer = setTimeout(() => beginMobileSortDrag(task, taskId, dateKey, startX, startY, event.pointerId), 360);
-      const cancel = moveEvent => {
-        if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) > 8) cleanup();
-      };
+      let armed = true;
       const cleanup = () => {
+        armed = false;
         clearTimeout(timer);
         document.removeEventListener("pointermove", cancel);
         document.removeEventListener("pointerup", cleanup);
         document.removeEventListener("pointercancel", cleanup);
+      };
+      const timer = setTimeout(() => {
+        if (!armed) return;
+        cleanup();
+        beginMobileSortDrag(task, taskId, dateKey, startX, startY, event.pointerId);
+      }, 420);
+      const cancel = moveEvent => {
+        if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) > 18) cleanup();
       };
       document.addEventListener("pointermove", cancel);
       document.addEventListener("pointerup", cleanup, { once: true });
@@ -3202,6 +3307,7 @@
       preview.style.height = `${rect.height}px`;
       document.body.appendChild(preview);
       taskEl.classList.add("dragging");
+      els.mobileContent.style.overflow = "hidden";
       mobileSortDrag = { taskEl, taskId, dateKey, preview, offsetX: x - rect.left, offsetY: y - rect.top, targetId: null };
       moveMobileSortPreview(x, y);
       document.body.classList.add("dragging-task");
@@ -3259,6 +3365,7 @@
       document.body.classList.remove("dragging-task");
       document.querySelectorAll(".drop-marker").forEach(el => el.remove());
       document.removeEventListener("pointermove", handleMobileSortMove);
+      els.mobileContent.style.overflow = "";
       mobileSortDrag = null;
     }
 
