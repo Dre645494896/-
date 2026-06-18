@@ -2657,6 +2657,7 @@
     let resetMobileContentScrollOnRender = false;
     let pendingMobileHighlightId = null;
     let mobileSortDrag = null;
+    let mobileSwipe = null;
 
     const els = {
       monthLabel: document.getElementById("monthLabel"),
@@ -2795,6 +2796,10 @@
       els.mobileSearchInput.addEventListener("input", renderMobileSearchResults);
       els.mobileContent.addEventListener("scroll", throttle(handleMobileContentScroll, 120));
       els.mobileContent.addEventListener("touchend", () => setTimeout(handleMobileContentScroll, 140), { passive: true });
+      els.mobileContent.addEventListener("pointerdown", handleMobileSwipeStart);
+      els.mobileContent.addEventListener("pointermove", handleMobileSwipeMove);
+      els.mobileContent.addEventListener("pointerup", handleMobileSwipeEnd);
+      els.mobileContent.addEventListener("pointercancel", cancelMobileSwipe);
       els.mobileContent.addEventListener("pointerdown", handleMobileSortPointerDown);
       document.getElementById("settingsBtn").addEventListener("click", openSettings);
       els.accountStatus.addEventListener("click", openAuth);
@@ -3177,6 +3182,56 @@
       renderMobileAnimated();
     }
 
+    function shiftMobileDay(offset) {
+      const current = parseKey(mobileSelectedDate);
+      current.setDate(current.getDate() + offset);
+      const nextKey = toKey(current);
+      setMobileDate(nextKey, "day");
+      showToast(`已切换到 ${nextKey.slice(5)}`);
+    }
+
+    function handleMobileSwipeStart(event) {
+      if (!isMobileViewport() || mobileViewMode !== "day" || event.button !== 0 || mobileSortDrag) return;
+      if (event.target.closest("button, input, select, textarea, [contenteditable='true']")) return;
+      mobileSwipe = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        lastX: event.clientX,
+        lastY: event.clientY,
+        cancelled: false,
+        locked: false
+      };
+    }
+
+    function handleMobileSwipeMove(event) {
+      if (!mobileSwipe || mobileSwipe.pointerId !== event.pointerId || mobileSwipe.cancelled || mobileSortDrag) return;
+      mobileSwipe.lastX = event.clientX;
+      mobileSwipe.lastY = event.clientY;
+      const dx = event.clientX - mobileSwipe.startX;
+      const dy = event.clientY - mobileSwipe.startY;
+      if (!mobileSwipe.locked && Math.abs(dx) > 18 && Math.abs(dx) > Math.abs(dy) * 1.35) {
+        mobileSwipe.locked = true;
+      }
+      if (mobileSwipe.locked) event.preventDefault();
+    }
+
+    function handleMobileSwipeEnd(event) {
+      if (!mobileSwipe || mobileSwipe.pointerId !== event.pointerId) return;
+      const swipe = mobileSwipe;
+      mobileSwipe = null;
+      if (swipe.cancelled || mobileSortDrag || mobileViewMode !== "day") return;
+      const dx = (event.clientX || swipe.lastX) - swipe.startX;
+      const dy = (event.clientY || swipe.lastY) - swipe.startY;
+      if (Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 1.35) {
+        shiftMobileDay(dx < 0 ? 1 : -1);
+      }
+    }
+
+    function cancelMobileSwipe() {
+      mobileSwipe = null;
+    }
+
     function setMobileMonth(year, month) {
       mobileSelectedDate = toKey(new Date(year, month, 1));
       mobileViewMode = "month";
@@ -3270,6 +3325,7 @@
 
     function handleMobileSortPointerDown(event) {
       if (!isMobileViewport() || mobileViewMode !== "day" || event.button !== 0) return;
+      if (mobileSwipe?.locked) return;
       const task = event.target.closest(".task");
       if (!task || event.target.closest("button, input, select, textarea")) return;
       const taskId = task.dataset.taskId;
@@ -3288,6 +3344,7 @@
       const timer = setTimeout(() => {
         if (!armed) return;
         cleanup();
+        cancelMobileSwipe();
         beginMobileSortDrag(task, taskId, dateKey, startX, startY, event.pointerId);
       }, 420);
       const cancel = moveEvent => {
