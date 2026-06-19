@@ -1657,8 +1657,12 @@
 
     @media (prefers-reduced-motion: reduce) {
       .modal-backdrop,
-      .modal {
+      .modal,
+      .mobile-day-card,
+      .mobile-day-card.mobile-swipe-settle,
+      .mobile-day-card.mobile-swipe-enter {
         transition: none;
+        animation: none;
       }
     }
 
@@ -1855,6 +1859,33 @@
       display: grid;
       align-content: start;
       gap: 12px;
+      transform: translate3d(0, 0, 0);
+      transform-origin: center;
+      will-change: transform, opacity;
+    }
+
+    .mobile-day-card.mobile-swipe-active {
+      transition: none;
+      box-shadow: 0 20px 46px rgba(31, 41, 51, .12);
+    }
+
+    .mobile-day-card.mobile-swipe-settle {
+      transition: transform .22s cubic-bezier(.22, 1, .36, 1), opacity .22s cubic-bezier(.22, 1, .36, 1);
+    }
+
+    .mobile-day-card.mobile-swipe-enter {
+      animation: mobileDaySwipeEnter .24s cubic-bezier(.22, 1, .36, 1);
+    }
+
+    @keyframes mobileDaySwipeEnter {
+      from {
+        opacity: .28;
+        transform: translate3d(var(--mobile-swipe-enter-x, 48px), 0, 0) scale(.985);
+      }
+      to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(1);
+      }
     }
 
     .mobile-day-title {
@@ -2153,7 +2184,82 @@
       .mobile-shell {
         display: block;
       }
+      .modal-backdrop {
+        align-items: flex-end;
+        justify-content: stretch;
+        padding: 0;
+        z-index: 90;
+        background: rgba(15, 23, 42, .38);
+      }
+      .modal {
+        width: 100%;
+        max-height: min(86dvh, calc(100dvh - max(42px, env(safe-area-inset-top))));
+        border-right: 0;
+        border-bottom: 0;
+        border-left: 0;
+        border-radius: 18px 18px 0 0;
+        padding: 16px 16px calc(14px + env(safe-area-inset-bottom));
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        transform: translateY(100%);
+      }
+      .modal-backdrop.show .modal {
+        transform: translateY(0);
+      }
+      .modal-backdrop.closing .modal {
+        transform: translateY(100%);
+      }
+      .modal-heading {
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .modal h2 {
+        font-size: 20px;
+        line-height: 1.25;
+      }
+      .task-priority-wrap {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+      .priority-option {
+        min-height: 36px;
+        min-width: 48px;
+        font-size: 13px;
+      }
+      .modal textarea,
+      .modal input,
+      .modal select {
+        min-height: 46px;
+        font-size: 16px;
+        border-radius: 10px;
+      }
+      #taskTitle {
+        min-height: 132px;
+        max-height: 34dvh;
+        font-size: 16px;
+        border-radius: 12px;
+      }
+      #taskTitle img {
+        max-height: 190px;
+      }
       .modal-row { grid-template-columns: 1fr; }
+      .modal-actions {
+        position: sticky;
+        bottom: calc(-14px - env(safe-area-inset-bottom));
+        z-index: 2;
+        margin: 14px -16px calc(-14px - env(safe-area-inset-bottom));
+        padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+        background: linear-gradient(180deg, rgba(255,255,255,.82), #fff 34%);
+        border-top: 1px solid rgba(203, 213, 225, .72);
+      }
+      .modal-actions .btn {
+        min-height: 44px;
+        padding: 0 16px;
+        border-radius: 10px;
+      }
+      .settings-modal {
+        width: 100%;
+      }
       .settings-two { grid-template-columns: 1fr; }
       .special-editor { grid-template-columns: 1fr 1fr; }
       .bulk-row { grid-template-columns: 1fr; }
@@ -2658,6 +2764,7 @@
     let pendingMobileHighlightId = null;
     let mobileSortDrag = null;
     let mobileSwipe = null;
+    let mobileSwipeAnimating = false;
 
     const els = {
       monthLabel: document.getElementById("monthLabel"),
@@ -3182,23 +3289,80 @@
       renderMobileAnimated();
     }
 
-    function shiftMobileDay(offset) {
+    function prefersReducedMotion() {
+      return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    }
+
+    function shiftMobileDay(offset, animated = false) {
       const current = parseKey(mobileSelectedDate);
       current.setDate(current.getDate() + offset);
       const nextKey = toKey(current);
-      setMobileDate(nextKey, "day");
+      if (animated) {
+        animateMobileDaySwitch(nextKey, offset);
+      } else {
+        setMobileDate(nextKey, "day");
+      }
       showToast(`已切换到 ${nextKey.slice(5)}`);
     }
 
+    function getMobileDayCard() {
+      return els.mobileContent?.querySelector(".mobile-day-card") || null;
+    }
+
+    function resetMobileSwipeCard(card = getMobileDayCard()) {
+      if (!card) return;
+      card.classList.remove("mobile-swipe-active", "mobile-swipe-settle", "mobile-swipe-enter");
+      card.style.removeProperty("transform");
+      card.style.removeProperty("opacity");
+      card.style.removeProperty("--mobile-swipe-enter-x");
+    }
+
+    function animateMobileDaySwitch(nextKey, offset) {
+      const card = getMobileDayCard();
+      if (!card || prefersReducedMotion()) {
+        mobileSelectedDate = nextKey;
+        mobileViewMode = "day";
+        resetMobileContentScrollOnRender = true;
+        renderMobile();
+        focusMobileDateStrip();
+        return;
+      }
+      mobileSwipeAnimating = true;
+      const width = Math.max(els.mobileContent?.clientWidth || window.innerWidth || 360, 320);
+      const exitX = offset > 0 ? -width : width;
+      const enterX = offset > 0 ? `${Math.round(width * .28)}px` : `${Math.round(width * -.28)}px`;
+      card.classList.remove("mobile-swipe-active");
+      card.classList.add("mobile-swipe-settle");
+      card.style.transform = `translate3d(${exitX}px, 0, 0) scale(.985)`;
+      card.style.opacity = ".22";
+      window.setTimeout(() => {
+        mobileSelectedDate = nextKey;
+        mobileViewMode = "day";
+        resetMobileContentScrollOnRender = true;
+        renderMobile();
+        const nextCard = getMobileDayCard();
+        if (nextCard) {
+          nextCard.style.setProperty("--mobile-swipe-enter-x", enterX);
+          nextCard.classList.add("mobile-swipe-enter");
+          window.setTimeout(() => resetMobileSwipeCard(nextCard), 260);
+        }
+        mobileSwipeAnimating = false;
+      }, 210);
+    }
+
     function handleMobileSwipeStart(event) {
-      if (!isMobileViewport() || mobileViewMode !== "day" || event.button !== 0 || mobileSortDrag) return;
+      if (!isMobileViewport() || mobileViewMode !== "day" || event.button !== 0 || mobileSortDrag || mobileSwipeAnimating) return;
       if (event.target.closest("button, input, select, textarea, [contenteditable='true']")) return;
+      const card = getMobileDayCard();
+      if (!card) return;
+      resetMobileSwipeCard(card);
       mobileSwipe = {
         pointerId: event.pointerId,
         startX: event.clientX,
         startY: event.clientY,
         lastX: event.clientX,
         lastY: event.clientY,
+        card,
         cancelled: false,
         locked: false
       };
@@ -3212,23 +3376,41 @@
       const dy = event.clientY - mobileSwipe.startY;
       if (!mobileSwipe.locked && Math.abs(dx) > 18 && Math.abs(dx) > Math.abs(dy) * 1.35) {
         mobileSwipe.locked = true;
+        mobileSwipe.card.classList.add("mobile-swipe-active");
       }
-      if (mobileSwipe.locked) event.preventDefault();
+      if (mobileSwipe.locked) {
+        const width = Math.max(els.mobileContent?.clientWidth || window.innerWidth || 360, 320);
+        const damped = Math.max(-width * .82, Math.min(width * .82, dx));
+        const progress = Math.min(1, Math.abs(damped) / width);
+        mobileSwipe.card.style.transform = `translate3d(${damped}px, 0, 0) scale(${1 - progress * .018})`;
+        mobileSwipe.card.style.opacity = String(1 - progress * .18);
+        event.preventDefault();
+      }
     }
 
     function handleMobileSwipeEnd(event) {
       if (!mobileSwipe || mobileSwipe.pointerId !== event.pointerId) return;
       const swipe = mobileSwipe;
       mobileSwipe = null;
-      if (swipe.cancelled || mobileSortDrag || mobileViewMode !== "day") return;
+      if (swipe.cancelled || mobileSortDrag || mobileViewMode !== "day") {
+        resetMobileSwipeCard(swipe.card);
+        return;
+      }
       const dx = (event.clientX || swipe.lastX) - swipe.startX;
       const dy = (event.clientY || swipe.lastY) - swipe.startY;
       if (Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 1.35) {
-        shiftMobileDay(dx < 0 ? 1 : -1);
+        shiftMobileDay(dx < 0 ? 1 : -1, true);
+        return;
       }
+      swipe.card.classList.remove("mobile-swipe-active");
+      swipe.card.classList.add("mobile-swipe-settle");
+      swipe.card.style.transform = "translate3d(0, 0, 0) scale(1)";
+      swipe.card.style.opacity = "1";
+      window.setTimeout(() => resetMobileSwipeCard(swipe.card), 230);
     }
 
     function cancelMobileSwipe() {
+      if (mobileSwipe?.card) resetMobileSwipeCard(mobileSwipe.card);
       mobileSwipe = null;
     }
 
