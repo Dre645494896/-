@@ -2,7 +2,8 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#f8fafc" />
   <link rel="icon" href="data:," />
   <title>极简待办</title>
   <style>
@@ -31,6 +32,7 @@
     }
 
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
     html { scroll-behavior: smooth; }
     body {
       margin: 0;
@@ -2867,7 +2869,14 @@
       applySettings();
       renderSelects();
       bindEvents();
-      handleAuthRedirect();
+      window.addEventListener("jijiandaiban:auth-url", event => {
+        handleAuthRedirect(event.detail?.url);
+      });
+      window.addEventListener("jijiandaiban:app-state", event => {
+        handleNativeAppState(Boolean(event.detail?.isActive));
+      });
+      handleAuthRedirect(window.__JIJIANDAIBAN_PENDING_AUTH_URL__ || window.location.href);
+      window.__JIJIANDAIBAN_PENDING_AUTH_URL__ = null;
       viewState = chooseLatestViewState(loadViewState(), settings.viewState);
       if (viewState) {
         settings.viewState = viewState;
@@ -5307,7 +5316,7 @@
         setCloudStatus("syncing");
         els.authSubmitBtn.disabled = true;
         els.authSubmitBtn.textContent = "发送中";
-        const session = await cloudRequest(`/auth/v1/signup?redirect_to=${encodeURIComponent(getSiteUrl())}`, {
+        const session = await cloudRequest(`/auth/v1/signup?redirect_to=${encodeURIComponent(getAuthRedirectUrl())}`, {
           method: "POST",
           body: JSON.stringify({ email, password })
         }, false);
@@ -5331,13 +5340,20 @@
       }
     }
 
-    async function handleAuthRedirect() {
-      const params = new URLSearchParams(window.location.search);
-      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    async function handleAuthRedirect(callbackUrl = window.location.href) {
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(callbackUrl, window.location.href);
+      } catch {
+        parsedUrl = new URL(window.location.href);
+      }
+      const params = parsedUrl.searchParams;
+      const hash = new URLSearchParams(parsedUrl.hash.replace(/^#/, ""));
+      const isNativeCallback = /^jijiandaiban:\/\/auth\/callback/i.test(callbackUrl);
       const error = params.get("error_description") || hash.get("error_description");
       if (error) {
         showToast(decodeURIComponent(error));
-        history.replaceState(null, "", getSiteUrl());
+        if (!isNativeCallback) history.replaceState(null, "", getSiteUrl());
         openAuth();
         return;
       }
@@ -5352,14 +5368,14 @@
           token_type: hash.get("token_type") || "bearer",
           user: null
         });
-        history.replaceState(null, "", getSiteUrl());
+        if (!isNativeCallback) history.replaceState(null, "", getSiteUrl());
         showToast("注册成功，正在加载云端数据");
         await loadCloudData();
         return;
       }
       const type = params.get("type") || hash.get("type");
       if (type === "signup" || type === "email_change") {
-        history.replaceState(null, "", getSiteUrl());
+        if (!isNativeCallback) history.replaceState(null, "", getSiteUrl());
         showToast("邮箱确认成功，请登录");
         openAuth();
       }
@@ -5399,7 +5415,7 @@
       return true;
     }
 
-    async function loadCloudData() {
+    async function loadCloudData({ silent = false } = {}) {
       if (!supabaseClient || !currentUser) return;
       cloudLoading = true;
       setCloudStatus("syncing");
@@ -5430,11 +5446,11 @@
             renderAround(bootAutoScrollActive ? new Date() : new Date(currentYear, currentMonth, 1));
             if (bootAutoScrollActive) scrollToTodayOnBoot();
           }
-          showToast("已加载云端数据");
+          if (!silent) showToast("已加载云端数据");
           if (shouldPushLocalViewState) setTimeout(() => saveCloudData(), 0);
         } else if (tasks.length || taskTemplates.length) {
           await saveCloudData();
-          showToast("已把本地数据迁移到云端");
+          if (!silent) showToast("已把本地数据迁移到云端");
         }
         setCloudStatus("synced");
       } catch (error) {
@@ -5494,6 +5510,23 @@
 
     function getSiteUrl() {
       return `${window.location.origin}${window.location.pathname}`;
+    }
+
+    function getAuthRedirectUrl() {
+      return window.__JIJIANDAIBAN_NATIVE__
+        ? "jijiandaiban://auth/callback"
+        : getSiteUrl();
+    }
+
+    async function handleNativeAppState(isActive) {
+      if (!window.__JIJIANDAIBAN_NATIVE__) return;
+      if (!isActive) {
+        saveCurrentViewStateImmediate();
+        saveLocalSnapshot();
+        if (currentUser) await saveCloudData();
+        return;
+      }
+      if (currentUser && ensureCloudClient()) await loadCloudData({ silent: true });
     }
 
     function getAuthErrorMessage(error) {

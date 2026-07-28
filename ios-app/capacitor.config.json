@@ -1,0 +1,13 @@
+{
+  "appId": "com.jijiandaiban.app",
+  "appName": "极简待办",
+  "webDir": "dist",
+  "backgroundColor": "#f8fafc",
+  "ios": {
+    "contentInset": "automatic",
+    "preferredContentMode": "mobile",
+    "scrollEnabled": true,
+    "allowsLinkPreview": false
+  }
+}
+

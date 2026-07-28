@@ -1,0 +1,25 @@
+{
+  "name": "jijiandaiban-ios",
+  "version": "0.1.0",
+  "private": true,
+  "description": "极简待办 iOS app shell",
+  "scripts": {
+    "build:web": "node scripts/build-web.mjs",
+    "assets:ios": "node scripts/generate-assets.mjs",
+    "sync:ios": "npm run build:web && cap sync ios && npm run assets:ios",
+    "open:ios": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/app": "7.0.2",
+    "@capacitor/core": "7.6.8",
+    "@capacitor/haptics": "7.0.2",
+    "@capacitor/ios": "7.6.8",
+    "@capacitor/keyboard": "7.0.2",
+    "@capacitor/status-bar": "7.0.2",
+    "chinese-days": "1.5.9"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "7.6.8",
+    "sharp": "0.35.3"
+  }
+}
