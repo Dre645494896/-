@@ -2745,6 +2745,7 @@
     let cloudLoading = false;
     let cloudStatus = "idle";
     let lastCloudSyncAt = 0;
+    let cloudSessionRefreshPromise = null;
     let bootAutoScrollActive = false;
     let pendingConfirmAction = null;
     let viewState = null;
@@ -2875,6 +2876,7 @@
       window.addEventListener("jijiandaiban:app-state", event => {
         handleNativeAppState(Boolean(event.detail?.isActive));
       });
+      window.addEventListener("storage", handleCloudSessionStorageChange);
       handleAuthRedirect(window.__JIJIANDAIBAN_PENDING_AUTH_URL__ || window.location.href);
       window.__JIJIANDAIBAN_PENDING_AUTH_URL__ = null;
       viewState = chooseLatestViewState(loadViewState(), settings.viewState);
@@ -5454,8 +5456,8 @@
         }
         setCloudStatus("synced");
       } catch (error) {
-        setCloudStatus("error");
-        showToast("云端数据读取失败");
+        setCloudStatus(isCloudAuthError(error) ? "idle" : "error");
+        showToast(getCloudFailureMessage(error, "云端数据读取失败"));
         console.error(error);
       } finally {
         cloudLoading = false;
@@ -5491,8 +5493,8 @@
           body: JSON.stringify(payload)
         }, true);
       } catch (error) {
-        setCloudStatus("error");
-        showToast("云同步失败");
+        setCloudStatus(isCloudAuthError(error) ? "idle" : "error");
+        showToast(getCloudFailureMessage(error, "云同步失败"));
         console.error(error);
         return false;
       }
@@ -5546,6 +5548,26 @@
       }
     }
 
+    function handleCloudSessionStorageChange(event) {
+      if (event.key !== SUPABASE_SESSION_KEY) return;
+      const session = loadCloudSession();
+      if (supabaseClient) supabaseClient.session = session;
+      currentUser = session?.user || (session?.access_token ? parseJwtUser(session.access_token) : null);
+      setCloudStatus("idle");
+      updateCloudUi();
+      if (currentUser && document.visibilityState === "visible") {
+        loadCloudData({ silent: true });
+      }
+    }
+
+    function clearCloudSession() {
+      localStorage.removeItem(SUPABASE_SESSION_KEY);
+      if (supabaseClient) supabaseClient.session = null;
+      currentUser = null;
+      setCloudStatus("idle");
+      updateCloudUi();
+    }
+
     function setCloudSession(session) {
       if (!session?.access_token) throw new Error("登录响应无效");
       session.expires_at_ms = Date.now() + Math.max(Number(session.expires_in || 3600) - 60, 60) * 1000;
@@ -5565,28 +5587,95 @@
       }
     }
 
-    async function refreshCloudSession() {
-      const session = supabaseClient?.session || loadCloudSession();
+    function useLatestCloudSession() {
+      const stored = loadCloudSession();
+      const memory = supabaseClient?.session || null;
+      const session = stored && (!memory || Number(stored.expires_at_ms || 0) >= Number(memory.expires_at_ms || 0))
+        ? stored
+        : memory;
+      if (supabaseClient) supabaseClient.session = session;
+      if (session?.user) currentUser = session.user;
+      return session;
+    }
+
+    function isCloudAuthError(error) {
+      return /refresh token|jwt|token.*expired|invalid.*token|not authenticated|unauthorized|登录状态已过期/i.test(String(error?.message || ""));
+    }
+
+    function getCloudFailureMessage(error, fallback) {
+      const message = String(error?.message || "");
+      if (isCloudAuthError(error)) return "登录状态已过期，请重新登录";
+      if (/413|payload.*large|request.*large|too large/i.test(message)) return "同步内容过大，请减少任务中的图片后重试";
+      return fallback;
+    }
+
+    async function refreshCloudSession(force = false) {
+      const session = useLatestCloudSession();
       if (!session?.refresh_token) return null;
-      if (session.expires_at_ms && session.expires_at_ms > Date.now()) return session;
-      const refreshed = await cloudRequest("/auth/v1/token?grant_type=refresh_token", {
-        method: "POST",
-        body: JSON.stringify({ refresh_token: session.refresh_token })
-      }, false);
-      setCloudSession(refreshed);
-      return refreshed;
+      if (!force && session.expires_at_ms && session.expires_at_ms > Date.now()) return session;
+      if (cloudSessionRefreshPromise) return cloudSessionRefreshPromise;
+
+      const refresh = async () => {
+        const latest = useLatestCloudSession();
+        if (!latest?.refresh_token) return null;
+        if (!force && latest.expires_at_ms && latest.expires_at_ms > Date.now()) return latest;
+        const attemptedToken = latest.refresh_token;
+        try {
+          const refreshed = await cloudRequest("/auth/v1/token?grant_type=refresh_token", {
+            method: "POST",
+            body: JSON.stringify({ refresh_token: attemptedToken })
+          }, false);
+          setCloudSession(refreshed);
+          return refreshed;
+        } catch (error) {
+          const newest = loadCloudSession();
+          if (newest?.refresh_token && newest.refresh_token !== attemptedToken) {
+            if (supabaseClient) supabaseClient.session = newest;
+            currentUser = newest.user || parseJwtUser(newest.access_token);
+            return newest;
+          }
+          if (isCloudAuthError(error)) {
+            clearCloudSession();
+            throw new Error("登录状态已过期，请重新登录");
+          }
+          throw error;
+        }
+      };
+
+      cloudSessionRefreshPromise = (navigator.locks?.request
+        ? navigator.locks.request("jijiandaiban-cloud-session", { mode: "exclusive" }, refresh)
+        : refresh()
+      ).finally(() => {
+        cloudSessionRefreshPromise = null;
+      });
+      return cloudSessionRefreshPromise;
     }
 
     async function cloudRequest(path, options = {}, needAuth = true) {
       if (!supabaseClient) ensureCloudClient();
-      const session = needAuth ? await refreshCloudSession() : null;
-      const headers = {
-        apikey: supabaseClient.anonKey,
-        Authorization: `Bearer ${needAuth ? session?.access_token : supabaseClient.anonKey}`,
-        "Content-Type": "application/json",
-        ...(options.headers || {})
-      };
-      const response = await fetch(`${supabaseClient.url}${path}`, { ...options, headers });
+      let session = needAuth ? await refreshCloudSession() : null;
+      if (needAuth && !session?.access_token) {
+        clearCloudSession();
+        throw new Error("登录状态已过期，请重新登录");
+      }
+      const request = token => fetch(`${supabaseClient.url}${path}`, {
+        ...options,
+        headers: {
+          apikey: supabaseClient.anonKey,
+          Authorization: `Bearer ${needAuth ? token : supabaseClient.anonKey}`,
+          "Content-Type": "application/json",
+          ...(options.headers || {})
+        }
+      });
+      let response = await request(session?.access_token);
+      if (needAuth && response.status === 401) {
+        session = await refreshCloudSession(true);
+        if (!session?.access_token) {
+          clearCloudSession();
+          throw new Error("登录状态已过期，请重新登录");
+        }
+        response = await request(session.access_token);
+      }
       if (!response.ok) {
         let message = `${response.status} ${response.statusText}`;
         try {
