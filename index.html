@@ -2640,6 +2640,9 @@
     const SUPABASE_URL_KEY = "jijiandaiban_supabase_url";
     const SUPABASE_ANON_KEY_KEY = "jijiandaiban_supabase_anon_key";
     const SUPABASE_SESSION_KEY = "jijiandaiban_supabase_session";
+    const AUTH_WEB_URL = "https://dre645494896.github.io/-/";
+    const AUTH_RECOVERY_KEY = "jijiandaiban_auth_recovery";
+    const DATA_OWNER_KEY = "jijiandaiban_data_owner";
     const SUPABASE_URL = "https://dnmszveczfcrbtzdehoj.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_xpfvWZRVFu72lD_cnXBdZw_sBDxBQPA";
     const DEFAULT_SETTINGS = {
@@ -2748,7 +2751,7 @@
     let editingSpecialDateId = null;
     let authMode = "login";
     let authBusy = false;
-    let authCodeSentTo = "";
+    let authFeedback = "";
     let authResendAt = 0;
     let authResendTimer = null;
     let settings = loadSettings();
@@ -2761,6 +2764,8 @@
     let cloudReady = false;
     let cloudSaveTimer = null;
     let cloudLoading = false;
+    let cloudWritableUserId = null;
+    let cloudReadVersion = 0;
     let cloudStatus = "idle";
     let lastCloudSyncAt = 0;
     let cloudSessionRefreshPromise = null;
@@ -2902,7 +2907,10 @@
         handleNativeAppState(Boolean(event.detail?.isActive));
       });
       window.addEventListener("storage", handleCloudSessionStorageChange);
-      handleAuthRedirect(window.__JIJIANDAIBAN_PENDING_AUTH_URL__ || window.location.href);
+      window.addEventListener("hashchange", () => {
+        if (/access_token=|error=|type=recovery/.test(window.location.hash)) handleAuthRedirect(window.location.href);
+      });
+      const bootAuthUrl = window.__JIJIANDAIBAN_PENDING_AUTH_URL__ || window.location.href;
       window.__JIJIANDAIBAN_PENDING_AUTH_URL__ = null;
       viewState = chooseLatestViewState(loadViewState(), settings.viewState);
       if (viewState) {
@@ -2919,7 +2927,7 @@
         scrollToTodayOnBoot();
       }
       setupInfiniteScroll();
-      initCloud();
+      handleAuthRedirect(bootAuthUrl).then(handled => { if (!handled) return initCloud(); });
       setTimeout(() => {
         bootAutoScrollActive = false;
       }, 5000);
@@ -4682,7 +4690,8 @@
     }
 
     function openAuth() {
-      if (!currentUser) setAuthMode("login");
+      if (getRecoveryState()) authMode = "reset";
+      else if (!currentUser) setAuthMode("login");
       updateCloudUi();
       showBackdrop(els.authBackdrop);
       if (!currentUser) setTimeout(() => els.authEmail.focus(), 0);
@@ -4697,6 +4706,7 @@
 
     function setAuthMode(mode) {
       if (authBusy || els.authSubmitBtn.disabled) return;
+      authFeedback = "";
       authMode = ["signup", "otp", "recover", "reset"].includes(mode) ? mode : "login";
       els.authPassword.value = "";
       els.authPasswordConfirm.value = "";
@@ -4742,6 +4752,52 @@
           login: "登录后会把任务、模板和设置同步到云端。"
         }[authMode];
       }
+      if (authFeedback) els.authStatusText.textContent = authFeedback;
+    }
+
+    function setAuthFeedback(message) {
+      authFeedback = message;
+      els.authStatusText.textContent = message;
+    }
+
+    function invalidateCloudWrites() {
+      cloudWritableUserId = null;
+      cloudReadVersion++;
+      cloudLoading = false;
+      clearTimeout(cloudSaveTimer);
+    }
+
+    function getRecoveryState() {
+      try {
+        const value = JSON.parse(sessionStorage.getItem(AUTH_RECOVERY_KEY));
+        return value && value.userId === currentUser?.id && value.expiresAt > Date.now() ? value : null;
+      } catch { return null; }
+    }
+
+    async function verifyCurrentIdentity() {
+      const token = supabaseClient?.session?.refresh_token;
+      const user = await cloudRequest("/auth/v1/user");
+      if (!user?.id || (token !== supabaseClient?.session?.refresh_token && user.id !== currentUser?.id)) throw new Error("账号状态已变化，请重新登录");
+      currentUser = user;
+      supabaseClient.session.user = user;
+      localStorage.setItem(SUPABASE_SESSION_KEY, JSON.stringify(supabaseClient.session));
+      return user;
+    }
+
+    async function acceptAuthSession(session, recovery = false) {
+      invalidateCloudWrites();
+      sessionStorage.removeItem(AUTH_RECOVERY_KEY);
+      setCloudSession(session);
+      const user = await verifyCurrentIdentity();
+      if (recovery) {
+        sessionStorage.setItem(AUTH_RECOVERY_KEY, JSON.stringify({ userId: user.id, expiresAt: Date.now() + 30 * 60 * 1000 }));
+        authMode = "reset";
+        authFeedback = "";
+        updateAuthModeUi();
+        showBackdrop(els.authBackdrop);
+        return;
+      }
+      await loadCloudData();
     }
 
     function updateAuthResendUi() {
@@ -4761,9 +4817,11 @@
       const token = els.authOtp.value.trim();
       if (action !== "reset" && (!email || !els.authEmail.checkValidity())) return showToast("请填写有效的邮箱地址");
       if (action === "sendCode" && Date.now() < authResendAt) return;
-      if (action === "otp" && (email !== authCodeSentTo || !/^\d{6,10}$/.test(token))) return showToast("请先向此邮箱发送验证码，再填写收到的验证码");
+      if (action === "otp" && !/^\d{6,10}$/.test(token)) return setAuthFeedback("请填写邮件中的有效验证码");
+      if (action === "reset" && !getRecoveryState()) return setAuthFeedback("重置验证已过期，请取消后重新发送重置邮件");
       if (action === "reset" && (password.length < 6 || password !== els.authPasswordConfirm.value)) return showToast("新密码至少 6 位，且两次输入必须一致");
       authBusy = true;
+      authFeedback = "";
       updateAuthModeUi();
       let message = "";
       let complete = false;
@@ -4774,7 +4832,6 @@
             method: "POST", body: JSON.stringify(action === "sendCode" ? { email, create_user: false } : { email })
           }, false);
           if (action === "sendCode") {
-            authCodeSentTo = email;
             authResendAt = Date.now() + 60000;
             clearInterval(authResendTimer);
             authResendTimer = setInterval(updateAuthResendUi, 1000);
@@ -4782,15 +4839,16 @@
           message = action === "sendCode" ? "验证码邮件已发送，请查看收件箱或垃圾邮件。如果邮件只有登录链接，也可点击链接登录。" : "如果该邮箱已注册，你将收到重置邮件。请在邮箱中点击链接设置新密码。";
         } else if (action === "otp") {
           const session = await cloudRequest("/auth/v1/verify", { method: "POST", body: JSON.stringify({ email, token, type: "email" }) }, false);
-          setCloudSession(session);
-          await loadCloudData();
+          await acceptAuthSession(session);
           message = cloudStatus === "error" ? "已登录，但云端同步失败，请稍后重试同步" : "已登录";
           complete = true;
         } else if (action === "reset") {
-          await cloudRequest("/auth/v1/user", { method: "PUT", body: JSON.stringify({ password }) });
+          const userId = currentUser.id;
+          await cloudRequest("/auth/v1/user", { method: "PUT", body: JSON.stringify({ password }) }, true, userId);
+          sessionStorage.removeItem(AUTH_RECOVERY_KEY);
           authMode = "login";
           await loadCloudData();
-          message = "密码已更新，已登录原账号";
+          message = cloudStatus === "error" ? "密码已更新，但云端数据读取失败，请重试同步" : "密码已更新，已登录原账号";
           complete = true;
         }
       } catch (error) {
@@ -4798,7 +4856,7 @@
       } finally {
         authBusy = false;
         updateAuthModeUi();
-        els.authStatusText.textContent = message;
+        setAuthFeedback(message);
       }
       if (complete) closeAuth();
       showToast(message);
@@ -5359,7 +5417,17 @@
         cloudReady = true;
         currentUser = supabaseClient.session?.user || null;
         updateCloudUi();
-        if (currentUser && authMode !== "reset") await loadCloudData();
+        if (currentUser) {
+          invalidateCloudWrites();
+          await verifyCurrentIdentity();
+          if (getRecoveryState()) {
+            authMode = "reset";
+            updateAuthModeUi();
+            showBackdrop(els.authBackdrop);
+          } else {
+            await loadCloudData();
+          }
+        }
       } catch (error) {
         cloudReady = false;
         showToast("云同步初始化失败");
@@ -5398,6 +5466,7 @@
       const email = els.authEmail.value.trim();
       const password = els.authPassword.value;
       if (!email || !password) return showToast("请填写邮箱和密码");
+      authFeedback = "";
       try {
         setCloudStatus("syncing");
         els.authSubmitBtn.disabled = true;
@@ -5406,11 +5475,10 @@
           method: "POST",
           body: JSON.stringify({ email, password })
         }, false);
-        setCloudSession(session);
-        await loadCloudData();
+        await acceptAuthSession(session);
       } catch (error) {
         setCloudStatus("error");
-        els.authStatusText.textContent = getAuthErrorMessage(error);
+        setAuthFeedback(getAuthErrorMessage(error));
         return showToast(getAuthErrorMessage(error));
       } finally {
         els.authSubmitBtn.disabled = false;
@@ -5425,6 +5493,7 @@
       const email = els.authEmail.value.trim();
       const password = els.authPassword.value;
       if (!email || password.length < 6) return showToast("请填写邮箱和至少 6 位密码");
+      authFeedback = "";
       try {
         setCloudStatus("syncing");
         els.authSubmitBtn.disabled = true;
@@ -5434,18 +5503,17 @@
           body: JSON.stringify({ email, password })
         }, false);
         if (session?.access_token) {
-          setCloudSession(session);
-          await loadCloudData();
+          await acceptAuthSession(session);
           closeAuth();
           showToast("注册并登录成功");
         } else {
           setCloudStatus("idle");
-          els.authStatusText.textContent = "确认邮件已发送，请到邮箱点击确认链接后再回来登录。";
+          setAuthFeedback("确认邮件已发送，请到邮箱点击确认链接后再回来登录。");
           showToast("确认邮件已发送");
         }
       } catch (error) {
         setCloudStatus("error");
-        els.authStatusText.textContent = getAuthErrorMessage(error);
+        setAuthFeedback(getAuthErrorMessage(error));
         showToast(getAuthErrorMessage(error));
       } finally {
         els.authSubmitBtn.disabled = false;
@@ -5465,44 +5533,58 @@
       const isNativeCallback = /^jijiandaiban:\/\/auth\/callback/i.test(callbackUrl);
       const error = params.get("error_description") || hash.get("error_description");
       if (error) {
-        showToast(decodeURIComponent(error));
         if (!isNativeCallback) history.replaceState(null, "", getSiteUrl());
         openAuth();
-        return;
+        setAuthFeedback(getAuthErrorMessage(new Error(error)));
+        return true;
       }
       const accessToken = hash.get("access_token");
       const refreshToken = hash.get("refresh_token");
       if (accessToken && refreshToken) {
-        if (!ensureCloudClient()) return;
+        if (!ensureCloudClient()) return true;
         const recovery = (params.get("type") || hash.get("type")) === "recovery";
-        if (recovery) authMode = "reset";
-        setCloudSession({
+        const session = {
           access_token: accessToken,
           refresh_token: refreshToken,
           expires_in: Number(hash.get("expires_in")) || 3600,
           token_type: hash.get("token_type") || "bearer",
           user: null
-        });
+        };
         if (!isNativeCallback) history.replaceState(null, "", getSiteUrl());
-        if (recovery) {
-          updateAuthModeUi();
-          showBackdrop(els.authBackdrop);
-          return;
+        try {
+          await acceptAuthSession(session, recovery);
+          if (!recovery) {
+            openAuth();
+            setAuthFeedback(cloudStatus === "error" ? "邮箱已验证，但云端读取失败，请点击立即同步重试" : "邮箱验证成功，已登录并加载云端数据");
+          }
+        } catch (error) {
+          clearCloudSession();
+          openAuth();
+          setAuthFeedback(getAuthErrorMessage(error));
         }
-        showToast("邮箱验证成功，正在登录");
-        await loadCloudData();
-        return;
+        return true;
       }
       const type = params.get("type") || hash.get("type");
       if (type === "signup" || type === "email_change") {
         if (!isNativeCallback) history.replaceState(null, "", getSiteUrl());
-        showToast("邮箱确认成功，请登录");
         openAuth();
+        setAuthFeedback("未收到有效的验证会话，请重新登录或发送验证邮件。");
+        return true;
       }
+      if (params.has("code") || params.has("token_hash") || hash.has("access_token") || type === "recovery") {
+        if (!isNativeCallback) history.replaceState(null, "", getSiteUrl());
+        openAuth();
+        setAuthFeedback("验证链接不完整或与当前网站不兼容，请重新发送邮件。");
+        return true;
+      }
+      return false;
     }
 
     async function signOut() {
       if (!ensureCloudClient()) return;
+      invalidateCloudWrites();
+      sessionStorage.removeItem(AUTH_RECOVERY_KEY);
+      authFeedback = "";
       localStorage.removeItem(SUPABASE_SESSION_KEY);
       if (supabaseClient) supabaseClient.session = null;
       currentUser = null;
@@ -5517,7 +5599,7 @@
         showToast("请先登录账号");
         return;
       }
-      const ok = await saveCloudData();
+      const ok = cloudWritableUserId === currentUser.id ? await saveCloudData() : await loadCloudData();
       if (ok) showToast("已同步到云端");
     }
 
@@ -5536,25 +5618,38 @@
     }
 
     async function loadCloudData({ silent = false } = {}) {
-      if (!supabaseClient || !currentUser) return;
+      if (!supabaseClient || !currentUser || getRecoveryState()) return false;
+      const userId = currentUser.id;
+      const version = ++cloudReadVersion;
+      cloudWritableUserId = null;
+      clearTimeout(cloudSaveTimer);
       cloudLoading = true;
       setCloudStatus("syncing");
       try {
-        const rows = await cloudRequest(`/rest/v1/todo_data?user_id=eq.${encodeURIComponent(currentUser.id)}&select=tasks,settings,templates`, {
+        await verifyCurrentIdentity();
+        if (version !== cloudReadVersion || currentUser?.id !== userId) return false;
+        const rows = await cloudRequest(`/rest/v1/todo_data?user_id=eq.${encodeURIComponent(userId)}&select=tasks,settings,templates`, {
           method: "GET"
-        }, true);
-        const data = Array.isArray(rows) ? rows[0] : rows;
-        if (data) {
+        }, true, userId);
+        if (version !== cloudReadVersion || currentUser?.id !== userId) return false;
+        if (!Array.isArray(rows)) throw new Error("云端返回格式无效");
+        const data = rows[0] || { tasks: [], settings: {}, templates: [] };
+        const owner = localStorage.getItem(DATA_OWNER_KEY);
+        if (owner !== userId) {
+          // Preserve the previous account/guest snapshot before replacing local data.
+          localStorage.setItem(`jijiandaiban_local_backup_${owner || "guest"}_${Date.now()}`, JSON.stringify({ tasks, settings, taskTemplates, dayStates, dayNotes, viewState }));
+          viewState = null;
+        }
           tasks = normalizeTasks(data.tasks || []);
           const cloudSettings = data.settings || {};
           settings = normalizeSettings({ ...DEFAULT_SETTINGS, ...cloudSettings });
-          const cloudViewState = normalizeViewState(cloudSettings.viewState);
-          viewState = chooseLatestViewState(viewState, loadViewState(), settings.viewState);
+          viewState = owner === userId ? chooseLatestViewState(viewState, loadViewState(), settings.viewState) : settings.viewState;
+          if (!viewState) localStorage.removeItem(VIEW_STATE_KEY);
           settings.viewState = viewState;
-          const shouldPushLocalViewState = viewState && (!cloudViewState || viewState.savedAt > cloudViewState.savedAt);
           dayStates = normalizeDayStates(cloudSettings.dayStates || {});
           dayNotes = normalizeDayNotes(cloudSettings.dayNotes || []);
           taskTemplates = normalizeTemplates(data.templates || []);
+          localStorage.setItem(DATA_OWNER_KEY, userId);
           saveLocalSnapshot();
           applySettings();
           renderSelects();
@@ -5567,30 +5662,34 @@
             if (bootAutoScrollActive) scrollToTodayOnBoot();
           }
           if (!silent) showToast("已加载云端数据");
-          if (shouldPushLocalViewState) setTimeout(() => saveCloudData(), 0);
-        } else if (tasks.length || taskTemplates.length) {
-          await saveCloudData();
-          if (!silent) showToast("已把本地数据迁移到云端");
-        }
+        cloudWritableUserId = userId;
+        lastCloudSyncAt = Date.now();
         setCloudStatus("synced");
+        return true;
       } catch (error) {
+        if (version !== cloudReadVersion || currentUser?.id !== userId) return false;
         setCloudStatus(isCloudAuthError(error) ? "idle" : "error");
+        setAuthFeedback("已登录，但云端数据尚未读取成功，已暂停上传。请点击立即同步重试。");
         showToast(getCloudFailureMessage(error, "云端数据读取失败"));
         console.error(error);
+        return false;
       } finally {
-        cloudLoading = false;
-        updateCloudUi();
+        if (version === cloudReadVersion) {
+          cloudLoading = false;
+          updateCloudUi();
+        }
       }
     }
 
     function queueCloudSave() {
-      if (cloudLoading || !supabaseClient || !currentUser) return;
+      if (cloudLoading || !supabaseClient || !currentUser || cloudWritableUserId !== currentUser.id || getRecoveryState()) return;
       clearTimeout(cloudSaveTimer);
       cloudSaveTimer = setTimeout(() => saveCloudData(), 700);
     }
 
     async function saveCloudData() {
-      if (!supabaseClient || !currentUser) return;
+      if (cloudLoading || !supabaseClient || !currentUser || cloudWritableUserId !== currentUser.id || getRecoveryState()) return false;
+      const userId = currentUser.id;
       const latestViewState = chooseLatestViewState(viewState, settings.viewState, loadViewState());
       if (latestViewState) {
         viewState = latestViewState;
@@ -5609,13 +5708,15 @@
           method: "POST",
           headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
           body: JSON.stringify(payload)
-        }, true);
+        }, true, userId);
       } catch (error) {
+        if (currentUser?.id !== userId) return false;
         setCloudStatus(isCloudAuthError(error) ? "idle" : "error");
         showToast(getCloudFailureMessage(error, "云同步失败"));
         console.error(error);
         return false;
       }
+      if (currentUser?.id !== userId || cloudWritableUserId !== userId) return false;
       lastCloudSyncAt = Date.now();
       setCloudStatus("synced");
       updateCloudUi();
@@ -5635,7 +5736,7 @@
     function getAuthRedirectUrl() {
       return window.__JIJIANDAIBAN_NATIVE__
         ? "jijiandaiban://auth/callback"
-        : getSiteUrl();
+        : AUTH_WEB_URL;
     }
 
     async function handleNativeAppState(isActive) {
@@ -5654,7 +5755,7 @@
       if (error?.status === 429) return "发送或尝试过于频繁，请稍后再试。";
       if (error?.code === "email_address_not_authorized") return "邮件服务尚未允许向此邮箱发送邮件，请联系管理员配置发信服务。";
       if (/invalid login|invalid_credentials/i.test(message)) return "邮箱或密码不正确。可以选择“忘记密码”重置，或使用邮箱验证码登录。";
-      if (/otp.*expired|token.*expired|invalid.*otp/i.test(message)) return "验证码或链接无效或已过期，请重新发送，并使用最新邮件。";
+      if (/otp.*expired|token.*expired|invalid.*otp|link.*invalid|link.*expired/i.test(message)) return "验证码或链接无效或已过期，请重新发送，并使用最新邮件。";
       if (/429|rate limit|security purposes|too many/i.test(message)) return "发送或尝试过于频繁，请稍后再试。";
       if (/same_password|different from the old/i.test(message)) return "新密码不能与旧密码相同。";
       if (/fetch|network|load failed/i.test(message)) return "无法连接登录服务，请检查网络后重试。";
@@ -5675,6 +5776,7 @@
 
     function handleCloudSessionStorageChange(event) {
       if (event.key !== SUPABASE_SESSION_KEY) return;
+      invalidateCloudWrites();
       const session = loadCloudSession();
       if (supabaseClient) supabaseClient.session = session;
       currentUser = session?.user || (session?.access_token ? parseJwtUser(session.access_token) : null);
@@ -5686,6 +5788,8 @@
     }
 
     function clearCloudSession() {
+      invalidateCloudWrites();
+      sessionStorage.removeItem(AUTH_RECOVERY_KEY);
       localStorage.removeItem(SUPABASE_SESSION_KEY);
       if (supabaseClient) supabaseClient.session = null;
       currentUser = null;
@@ -5695,6 +5799,8 @@
 
     function setCloudSession(session) {
       if (!session?.access_token) throw new Error("登录响应无效");
+      const nextUser = session.user || parseJwtUser(session.access_token);
+      if (nextUser?.id !== currentUser?.id) invalidateCloudWrites();
       session.expires_at_ms = Date.now() + Math.max(Number(session.expires_in || 3600) - 60, 60) * 1000;
       session.user = session.user || parseJwtUser(session.access_token);
       localStorage.setItem(SUPABASE_SESSION_KEY, JSON.stringify(session));
@@ -5750,6 +5856,8 @@
             method: "POST",
             body: JSON.stringify({ refresh_token: attemptedToken })
           }, false);
+          const storedNow = loadCloudSession();
+          if (!storedNow || (storedNow.refresh_token !== attemptedToken && storedNow.user?.id !== latest.user?.id)) throw new Error("账号状态已变化，请重新登录");
           setCloudSession(refreshed);
           return refreshed;
         } catch (error) {
@@ -5776,14 +5884,17 @@
       return cloudSessionRefreshPromise;
     }
 
-    async function cloudRequest(path, options = {}, needAuth = true) {
+    async function cloudRequest(path, options = {}, needAuth = true, expectedUserId = null) {
       if (!supabaseClient) ensureCloudClient();
       let session = needAuth ? await refreshCloudSession() : null;
       if (needAuth && !session?.access_token) {
         clearCloudSession();
         throw new Error("登录状态已过期，请重新登录");
       }
-      const request = token => fetch(`${supabaseClient.url}${path}`, {
+      const client = supabaseClient;
+      const request = token => {
+        if (expectedUserId && (currentUser?.id !== expectedUserId || supabaseClient !== client)) throw new Error("账号状态已变化，请重试");
+        return fetch(`${client.url}${path}`, {
         ...options,
         headers: {
           apikey: supabaseClient.anonKey,
@@ -5791,7 +5902,8 @@
           "Content-Type": "application/json",
           ...(options.headers || {})
         }
-      });
+        });
+      };
       let response = await request(session?.access_token);
       if (needAuth && response.status === 401) {
         session = await refreshCloudSession(true);
@@ -5837,7 +5949,7 @@
       return cloudStatus === "syncing" ? "同步中"
         : cloudStatus === "synced" ? "已同步"
         : cloudStatus === "error" ? "同步失败"
-        : currentUser ? "已同步" : "登录";
+        : currentUser ? (cloudWritableUserId === currentUser.id ? "已同步" : "未同步") : "登录";
     }
 
     function updateCloudUi() {
@@ -5849,7 +5961,7 @@
         ? `已登录：${currentUser.email || currentUser.id}`
         : "点击登录或注册账号";
       els.accountStatus.classList.toggle("syncing", cloudStatus === "syncing");
-      els.accountStatus.classList.toggle("synced", currentUser && (cloudStatus === "synced" || cloudStatus === "idle"));
+      els.accountStatus.classList.toggle("synced", currentUser && cloudWritableUserId === currentUser.id && (cloudStatus === "synced" || cloudStatus === "idle"));
       els.accountStatus.classList.toggle("error", cloudStatus === "error");
       if (els.authStatusText) {
         updateAuthModeUi();
