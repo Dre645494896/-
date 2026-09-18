@@ -1254,6 +1254,11 @@
       flex-wrap: wrap;
     }
 
+    #authOtpRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    #authAlternatives { flex-wrap: wrap; gap: 8px; }
+    #authForm button:disabled { cursor: wait; opacity: .6; }
+    #authForm input { min-width: 0; }
+
     .auth-status {
       min-height: 32px;
       display: flex;
@@ -2522,9 +2527,18 @@
     <form class="modal" id="authForm">
       <h2 id="authTitle">登录账号</h2>
       <div class="modal-grid">
-        <div class="auth-status" id="authStatusText">登录后会把任务、模板和设置同步到云端。</div>
+        <div class="auth-status" id="authStatusText" role="status" aria-live="polite">登录后会把任务、模板和设置同步到云端。</div>
         <input id="authEmail" type="email" placeholder="邮箱" autocomplete="email" />
         <input id="authPassword" type="password" placeholder="密码，至少 6 位" autocomplete="current-password" />
+        <input id="authPasswordConfirm" type="password" placeholder="再次输入新密码" autocomplete="new-password" aria-label="确认新密码" hidden />
+        <div id="authOtpRow" hidden>
+          <input id="authOtp" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="邮箱验证码" aria-label="邮箱验证码" maxlength="10" />
+          <button class="btn" type="button" id="authSendCodeBtn">发送验证码</button>
+        </div>
+        <div class="auth-switch" id="authAlternatives">
+          <button class="btn" type="button" id="authOtpModeBtn">邮箱验证码登录</button>
+          <button class="btn" type="button" id="authForgotBtn">忘记密码</button>
+        </div>
         <div class="auth-switch" hidden>
           <span id="authSwitchText">没有账号？</span>
         </div>
@@ -2733,6 +2747,10 @@
     let editingNoteId = null;
     let editingSpecialDateId = null;
     let authMode = "login";
+    let authBusy = false;
+    let authCodeSentTo = "";
+    let authResendAt = 0;
+    let authResendTimer = null;
     let settings = loadSettings();
     let taskTemplates = loadTemplates();
     let dayStates = loadDayStates();
@@ -2828,6 +2846,13 @@
       authStatusText: document.getElementById("authStatusText"),
       authEmail: document.getElementById("authEmail"),
       authPassword: document.getElementById("authPassword"),
+      authPasswordConfirm: document.getElementById("authPasswordConfirm"),
+      authOtpRow: document.getElementById("authOtpRow"),
+      authOtp: document.getElementById("authOtp"),
+      authSendCodeBtn: document.getElementById("authSendCodeBtn"),
+      authAlternatives: document.getElementById("authAlternatives"),
+      authOtpModeBtn: document.getElementById("authOtpModeBtn"),
+      authForgotBtn: document.getElementById("authForgotBtn"),
       authSwitchText: document.getElementById("authSwitchText"),
       authModeBtn: document.getElementById("authModeBtn"),
       authSubmitBtn: document.getElementById("authSubmitBtn"),
@@ -2943,6 +2968,9 @@
       els.settingsForm.addEventListener("submit", saveSettings);
       els.authForm.addEventListener("submit", handleAuthSubmit);
       els.authModeBtn.addEventListener("click", () => setAuthMode(authMode === "login" ? "signup" : "login"));
+      els.authOtpModeBtn.addEventListener("click", () => setAuthMode("otp"));
+      els.authForgotBtn.addEventListener("click", () => setAuthMode("recover"));
+      els.authSendCodeBtn.addEventListener("click", () => runAuthAction("sendCode"));
       document.getElementById("logoutBtn").addEventListener("click", signOut);
       els.authSyncBtn.addEventListener("click", syncNow);
       document.getElementById("authCancelBtn").addEventListener("click", closeAuth);
@@ -4661,38 +4689,119 @@
     }
 
     function closeAuth() {
+      if (authBusy) return;
       hideBackdrop(els.authBackdrop);
       els.authForm.reset();
+      authMode = "login";
     }
 
     function setAuthMode(mode) {
-      authMode = mode === "signup" ? "signup" : "login";
+      if (authBusy || els.authSubmitBtn.disabled) return;
+      authMode = ["signup", "otp", "recover", "reset"].includes(mode) ? mode : "login";
+      els.authPassword.value = "";
+      els.authPasswordConfirm.value = "";
+      els.authOtp.value = "";
       updateAuthModeUi();
     }
 
     function updateAuthModeUi() {
       const signingUp = authMode === "signup";
-      const signedIn = Boolean(currentUser);
-      els.authTitle.textContent = signedIn ? "账号状态" : (signingUp ? "注册账号" : "登录账号");
-      els.authSubmitBtn.textContent = signingUp ? "注册" : "登录";
+      const resetting = authMode === "reset";
+      const signedIn = Boolean(currentUser) && !resetting;
+      const titles = { login: "登录账号", signup: "注册账号", otp: "邮箱验证码登录", recover: "找回密码", reset: "设置新密码" };
+      els.authTitle.textContent = signedIn ? "账号状态" : titles[authMode];
+      els.authSubmitBtn.textContent = authBusy ? "处理中…" : ({ signup: "注册", recover: "发送重置邮件", reset: "保存新密码" }[authMode] || "登录");
       els.authSwitchText.textContent = signingUp ? "已有账号？" : "没有账号？";
-      els.authModeBtn.textContent = signingUp ? "返回登录" : "注册";
-      els.authPassword.autocomplete = signingUp ? "new-password" : "current-password";
-      els.authEmail.hidden = signedIn;
-      els.authPassword.hidden = signedIn;
-      els.authModeBtn.hidden = signedIn;
+      els.authModeBtn.textContent = authMode === "login" ? "注册" : "返回登录";
+      els.authPassword.autocomplete = signingUp || resetting ? "new-password" : "current-password";
+      els.authPassword.placeholder = resetting ? "新密码，至少 6 位" : "密码，至少 6 位";
+      els.authEmail.hidden = signedIn || resetting;
+      els.authEmail.disabled = signedIn || resetting || authBusy;
+      els.authPassword.hidden = signedIn || ["otp", "recover"].includes(authMode);
+      els.authPassword.disabled = els.authPassword.hidden || authBusy;
+      els.authPasswordConfirm.hidden = !resetting;
+      els.authPasswordConfirm.disabled = !resetting || authBusy;
+      els.authOtpRow.hidden = signedIn || authMode !== "otp";
+      els.authAlternatives.hidden = signedIn || authMode !== "login";
+      els.authModeBtn.hidden = signedIn || resetting;
       els.authSubmitBtn.hidden = signedIn;
       els.logoutBtn.hidden = !signedIn;
       els.authSyncBtn.hidden = !signedIn;
       els.authCancelBtn.textContent = signedIn ? "关闭" : "取消";
+      [els.authSubmitBtn, els.authModeBtn, els.authOtpModeBtn, els.authForgotBtn, els.authCancelBtn].forEach(button => button.disabled = authBusy);
+      updateAuthResendUi();
       if (signedIn) {
         const statusText = getCloudStatusText();
         els.authStatusText.textContent = `当前账号：${currentUser.email || currentUser.id}。当前状态：${statusText}${lastCloudSyncAt ? `，最近同步 ${new Date(lastCloudSyncAt).toLocaleTimeString()}` : ""}。`;
       } else {
-        els.authStatusText.textContent = signingUp
-          ? "填写邮箱和密码后会发送确认邮件，请在邮箱里完成注册。"
-          : "登录后会把任务、模板和设置同步到云端。";
+        els.authStatusText.textContent = {
+          signup: "填写邮箱和密码后会发送确认邮件，请在邮箱里完成注册。",
+          otp: "输入已注册邮箱，发送验证码后填写邮件中的验证码。",
+          recover: "向你的邮箱发送重置链接，验证邮箱后即可设置新密码。",
+          reset: "邮箱已验证，请设置新密码。原有任务和数据不会被删除。",
+          login: "登录后会把任务、模板和设置同步到云端。"
+        }[authMode];
       }
+    }
+
+    function updateAuthResendUi() {
+      const seconds = Math.max(0, Math.ceil((authResendAt - Date.now()) / 1000));
+      els.authSendCodeBtn.disabled = authBusy || seconds > 0;
+      els.authSendCodeBtn.textContent = seconds ? `${seconds} 秒后重发` : "发送验证码";
+      if (!seconds && authResendTimer) {
+        clearInterval(authResendTimer);
+        authResendTimer = null;
+      }
+    }
+
+    async function runAuthAction(action) {
+      if (authBusy || !ensureCloudClient()) return;
+      const email = els.authEmail.value.trim();
+      const password = els.authPassword.value;
+      const token = els.authOtp.value.trim();
+      if (action !== "reset" && (!email || !els.authEmail.checkValidity())) return showToast("请填写有效的邮箱地址");
+      if (action === "sendCode" && Date.now() < authResendAt) return;
+      if (action === "otp" && (email !== authCodeSentTo || !/^\d{6,10}$/.test(token))) return showToast("请先向此邮箱发送验证码，再填写收到的验证码");
+      if (action === "reset" && (password.length < 6 || password !== els.authPasswordConfirm.value)) return showToast("新密码至少 6 位，且两次输入必须一致");
+      authBusy = true;
+      updateAuthModeUi();
+      let message = "";
+      let complete = false;
+      try {
+        if (action === "sendCode" || action === "recover") {
+          const path = action === "sendCode" ? "/auth/v1/otp" : "/auth/v1/recover";
+          await cloudRequest(`${path}?redirect_to=${encodeURIComponent(getAuthRedirectUrl())}`, {
+            method: "POST", body: JSON.stringify(action === "sendCode" ? { email, create_user: false } : { email })
+          }, false);
+          if (action === "sendCode") {
+            authCodeSentTo = email;
+            authResendAt = Date.now() + 60000;
+            clearInterval(authResendTimer);
+            authResendTimer = setInterval(updateAuthResendUi, 1000);
+          }
+          message = action === "sendCode" ? "验证码邮件已发送，请查看收件箱或垃圾邮件。如果邮件只有登录链接，也可点击链接登录。" : "如果该邮箱已注册，你将收到重置邮件。请在邮箱中点击链接设置新密码。";
+        } else if (action === "otp") {
+          const session = await cloudRequest("/auth/v1/verify", { method: "POST", body: JSON.stringify({ email, token, type: "email" }) }, false);
+          setCloudSession(session);
+          await loadCloudData();
+          message = cloudStatus === "error" ? "已登录，但云端同步失败，请稍后重试同步" : "已登录";
+          complete = true;
+        } else if (action === "reset") {
+          await cloudRequest("/auth/v1/user", { method: "PUT", body: JSON.stringify({ password }) });
+          authMode = "login";
+          await loadCloudData();
+          message = "密码已更新，已登录原账号";
+          complete = true;
+        }
+      } catch (error) {
+        message = getAuthErrorMessage(error);
+      } finally {
+        authBusy = false;
+        updateAuthModeUi();
+        els.authStatusText.textContent = message;
+      }
+      if (complete) closeAuth();
+      showToast(message);
     }
 
     function showBackdrop(el) {
@@ -5250,7 +5359,7 @@
         cloudReady = true;
         currentUser = supabaseClient.session?.user || null;
         updateCloudUi();
-        if (currentUser) await loadCloudData();
+        if (currentUser && authMode !== "reset") await loadCloudData();
       } catch (error) {
         cloudReady = false;
         showToast("云同步初始化失败");
@@ -5278,6 +5387,8 @@
 
     function handleAuthSubmit(event) {
       event.preventDefault();
+      if (authBusy || els.authSubmitBtn.disabled) return;
+      if (["otp", "recover", "reset"].includes(authMode)) return runAuthAction(authMode);
       if (authMode === "signup") return signUp();
       return signIn();
     }
@@ -5300,13 +5411,13 @@
       } catch (error) {
         setCloudStatus("error");
         els.authStatusText.textContent = getAuthErrorMessage(error);
-        return showToast(error.message || "登录失败");
+        return showToast(getAuthErrorMessage(error));
       } finally {
         els.authSubmitBtn.disabled = false;
         els.authSubmitBtn.textContent = authMode === "signup" ? "注册" : "登录";
       }
       closeAuth();
-      showToast("已登录");
+      showToast(cloudStatus === "error" ? "已登录，但云端同步失败，请稍后重试同步" : "已登录");
     }
 
     async function signUp() {
@@ -5335,7 +5446,7 @@
       } catch (error) {
         setCloudStatus("error");
         els.authStatusText.textContent = getAuthErrorMessage(error);
-        showToast(error.message || "注册失败");
+        showToast(getAuthErrorMessage(error));
       } finally {
         els.authSubmitBtn.disabled = false;
         els.authSubmitBtn.textContent = authMode === "signup" ? "注册" : "登录";
@@ -5362,7 +5473,9 @@
       const accessToken = hash.get("access_token");
       const refreshToken = hash.get("refresh_token");
       if (accessToken && refreshToken) {
-        ensureCloudClient();
+        if (!ensureCloudClient()) return;
+        const recovery = (params.get("type") || hash.get("type")) === "recovery";
+        if (recovery) authMode = "reset";
         setCloudSession({
           access_token: accessToken,
           refresh_token: refreshToken,
@@ -5371,7 +5484,12 @@
           user: null
         });
         if (!isNativeCallback) history.replaceState(null, "", getSiteUrl());
-        showToast("注册成功，正在加载云端数据");
+        if (recovery) {
+          updateAuthModeUi();
+          showBackdrop(els.authBackdrop);
+          return;
+        }
+        showToast("邮箱验证成功，正在登录");
         await loadCloudData();
         return;
       }
@@ -5533,7 +5651,14 @@
 
     function getAuthErrorMessage(error) {
       const message = String(error?.message || "");
-      if (/invalid login/i.test(message)) return "邮箱或密码不正确。";
+      if (error?.status === 429) return "发送或尝试过于频繁，请稍后再试。";
+      if (error?.code === "email_address_not_authorized") return "邮件服务尚未允许向此邮箱发送邮件，请联系管理员配置发信服务。";
+      if (/invalid login|invalid_credentials/i.test(message)) return "邮箱或密码不正确。可以选择“忘记密码”重置，或使用邮箱验证码登录。";
+      if (/otp.*expired|token.*expired|invalid.*otp/i.test(message)) return "验证码或链接无效或已过期，请重新发送，并使用最新邮件。";
+      if (/429|rate limit|security purposes|too many/i.test(message)) return "发送或尝试过于频繁，请稍后再试。";
+      if (/same_password|different from the old/i.test(message)) return "新密码不能与旧密码相同。";
+      if (/fetch|network|load failed/i.test(message)) return "无法连接登录服务，请检查网络后重试。";
+      if (/email.*not.*allowed|email_address_not_authorized/i.test(message)) return "邮件服务尚未允许向此邮箱发送邮件，请联系管理员配置发信服务。";
       if (/email not confirmed/i.test(message)) return "邮箱还没有确认，请先点击确认邮件里的链接。";
       if (/already registered|already exists/i.test(message)) return "这个邮箱已经注册，请直接登录。";
       return message || "操作失败，请稍后重试。";
@@ -5678,11 +5803,16 @@
       }
       if (!response.ok) {
         let message = `${response.status} ${response.statusText}`;
+        let code = "";
         try {
           const data = await response.json();
           message = data.msg || data.message || data.error_description || message;
+          code = data.error_code || data.code || "";
         } catch {}
-        throw new Error(message);
+        const error = new Error(message);
+        error.status = response.status;
+        error.code = code;
+        throw error;
       }
       if (response.status === 204) return null;
       const text = await response.text();
