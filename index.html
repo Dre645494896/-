@@ -320,12 +320,12 @@
       border-bottom: 1px solid var(--line);
     }
 
-    .month-band-a .day:not(.is-today):not(.drag-over) {
+    .month-band-a .day:not(.is-today):not(.selected-day):not(.has-special):not(.day-good):not(.day-bad):not(.drag-over) {
       background: #ffffff;
     }
 
-    .month-band-b .day:not(.is-today):not(.drag-over) {
-      background: #fbfcff;
+    .month-band-b .day:not(.is-today):not(.selected-day):not(.has-special):not(.day-good):not(.day-bad):not(.drag-over) {
+      background: #ffffff;
     }
 
     .month-start {
@@ -359,7 +359,7 @@
     }
 
     .day.other-month {
-      background: #fbfcfd;
+      background: #ffffff;
       color: var(--quiet);
     }
 
@@ -367,7 +367,7 @@
       display: none;
     }
 
-    .day.weekend.weekend-tint:not(.is-today) {
+    .day.weekend.weekend-tint:not(.is-today):not(.selected-day):not(.has-special):not(.day-good):not(.day-bad):not(.rest-day):not(.work-adjust-day) {
       background: #fffafa;
     }
 
