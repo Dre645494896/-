@@ -360,7 +360,6 @@
 
     .day.other-month {
       background: #ffffff;
-      color: var(--quiet);
     }
 
     .day.other-month.hide-other-tasks .task-list {
@@ -375,10 +374,6 @@
       color: #d94665;
     }
 
-    .day.rest-day:not(.is-today):not(.selected-day):not(.has-special):not(.day-good):not(.day-bad):not(.drag-over) {
-      background: #f2f4f7;
-    }
-
     .rest-day-pill,
     .work-adjust-pill {
       border-radius: 999px;
@@ -390,8 +385,16 @@
     }
 
     .rest-day-pill {
-      color: #64748b;
-      background: rgba(100, 116, 139, .14);
+      color: #94a3b8;
+      background: rgba(148, 163, 184, .12);
+    }
+
+    .day.rest-day:not(.is-today):not(.selected-day):not(.has-special):not(.day-good):not(.day-bad) .date-num,
+    .day.rest-day:not(.is-today):not(.selected-day):not(.has-special):not(.day-good):not(.day-bad) .date-inline-meta,
+    .day.rest-day:not(.is-today):not(.selected-day):not(.has-special):not(.day-good):not(.day-bad) .date-inline-chip,
+    .day.rest-day:not(.is-today):not(.selected-day):not(.has-special):not(.day-good):not(.day-bad) .date-inline-sep,
+    .day.rest-day:not(.is-today):not(.selected-day):not(.has-special):not(.day-good):not(.day-bad) .rest-day-pill {
+      color: #94a3b8;
     }
 
     .work-adjust-pill {
