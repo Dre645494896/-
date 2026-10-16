@@ -68,4 +68,21 @@ create trigger strip_beta_signup_code before insert or update of raw_user_meta_d
   on auth.users for each row
   execute function registration_private.strip_beta_signup_code();
 
+create or replace function registration_private.strip_beta_identity_code()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+  new.identity_data := coalesce(new.identity_data, '{}'::jsonb) - 'beta_code';
+  return new;
+end;
+$$;
+revoke all on function registration_private.strip_beta_identity_code() from public, anon, authenticated;
+drop trigger if exists strip_beta_identity_code on auth.identities;
+create trigger strip_beta_identity_code before insert or update of identity_data
+  on auth.identities for each row
+  execute function registration_private.strip_beta_identity_code();
+
 commit;

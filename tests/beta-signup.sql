@@ -71,5 +71,17 @@ begin
 end;
 $$;
 
+create temporary table beta_identity_cleanup_test (identity_data jsonb);
+create trigger test_identity_cleanup before insert or update on beta_identity_cleanup_test
+  for each row execute function registration_private.strip_beta_identity_code();
+insert into beta_identity_cleanup_test values ('{"beta_code":"mock-test-code.","sub":"Keep me"}');
+do $$
+begin
+  if (select identity_data from beta_identity_cleanup_test) <> '{"sub":"Keep me"}'::jsonb then
+    raise exception 'identity code not removed or unrelated data changed';
+  end if;
+end;
+$$;
+
 rollback;
 select 'PASS: valid/missing/wrong/case/period/length codes, fail-closed config, private permissions and metadata cleanup; all test changes rolled back' as result;
