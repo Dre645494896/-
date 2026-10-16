@@ -55,16 +55,17 @@ async (page) => {
   await page.locator('#authModeBtn').click();
   await page.locator('#authEmail').fill('test@example.com');
   await page.locator('#authPassword').fill('dummy-password');
+  await page.locator('#authBetaCode').fill('mock-test-code.');
   await page.locator('#authSubmitBtn').click();
   await page.waitForFunction(() => document.querySelector('#authStatusText').textContent.includes('确认邮件已发送'));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('#authModeBtn').click();
   await page.locator('#authOtpModeBtn').click();
-  await page.screenshot({ path: 'auth-mobile.png' });
+  await page.screenshot({ path: 'output/playwright/auth-mobile.png' });
   const bounds = await page.locator('#authSubmitBtn').boundingBox();
   check(bounds && bounds.y >= 0 && bounds.y + bounds.height <= 844, 'mobile submit visible');
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.screenshot({ path: 'auth-desktop.png' });
+  await page.screenshot({ path: 'output/playwright/auth-desktop.png' });
   check(errors.length === 0, 'page errors: ' + errors.join(', '));
   console.log('PASS: wrong password, recovery email, OTP send/cooldown/invalid/success, reset callback/validation/save, signup, mobile bounds, no page errors. APIs mocked; no real email sent.');
 }

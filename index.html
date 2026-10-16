@@ -2538,6 +2538,7 @@
         <input id="authEmail" type="email" placeholder="邮箱" autocomplete="email" />
         <input id="authPassword" type="password" placeholder="密码，至少 6 位" autocomplete="current-password" />
         <input id="authPasswordConfirm" type="password" placeholder="再次输入新密码" autocomplete="new-password" aria-label="确认新密码" hidden />
+        <input id="authBetaCode" type="password" placeholder="内测码" aria-label="内测码" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="128" hidden disabled />
         <div id="authOtpRow" hidden>
           <input id="authOtp" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="邮箱验证码" aria-label="邮箱验证码" maxlength="10" />
           <button class="btn" type="button" id="authSendCodeBtn">发送验证码</button>
@@ -2867,6 +2868,7 @@
       authForgotBtn: document.getElementById("authForgotBtn"),
       authSwitchText: document.getElementById("authSwitchText"),
       authModeBtn: document.getElementById("authModeBtn"),
+      authBetaCode: document.getElementById("authBetaCode"),
       authSubmitBtn: document.getElementById("authSubmitBtn"),
       authSyncBtn: document.getElementById("authSyncBtn"),
       logoutBtn: document.getElementById("logoutBtn"),
@@ -4718,6 +4720,7 @@
       els.authPassword.value = "";
       els.authPasswordConfirm.value = "";
       els.authOtp.value = "";
+      els.authBetaCode.value = "";
       updateAuthModeUi();
     }
 
@@ -4738,6 +4741,8 @@
       els.authPassword.disabled = els.authPassword.hidden || authBusy;
       els.authPasswordConfirm.hidden = !resetting;
       els.authPasswordConfirm.disabled = !resetting || authBusy;
+      els.authBetaCode.hidden = signedIn || !signingUp;
+      els.authBetaCode.disabled = els.authBetaCode.hidden || authBusy;
       els.authOtpRow.hidden = signedIn || authMode !== "otp";
       els.authAlternatives.hidden = signedIn || authMode !== "login";
       els.authModeBtn.hidden = signedIn || resetting;
@@ -4752,7 +4757,7 @@
         els.authStatusText.textContent = `当前账号：${currentUser.email || currentUser.id}。当前状态：${statusText}${lastCloudSyncAt ? `，最近同步 ${new Date(lastCloudSyncAt).toLocaleTimeString()}` : ""}。`;
       } else {
         els.authStatusText.textContent = {
-          signup: "填写邮箱和密码后会发送确认邮件，请在邮箱里完成注册。",
+          signup: "内测期间需凭内测码注册，未注册也可本地使用。注册后请在邮箱里完成确认。",
           otp: "输入已注册邮箱，发送验证码后填写邮件中的验证码。",
           recover: "向你的邮箱发送重置链接，验证邮箱后即可设置新密码。",
           reset: "邮箱已验证，请设置新密码。原有任务和数据不会被删除。",
@@ -5496,21 +5501,31 @@
     }
 
     async function signUp() {
-      if (!ensureCloudClient()) return;
+      if (authBusy || !ensureCloudClient()) return;
       const email = els.authEmail.value.trim();
       const password = els.authPassword.value;
-      if (!email || password.length < 6) return showToast("请填写邮箱和至少 6 位密码");
+      const betaCode = els.authBetaCode.value.trim();
+      if (!email || !els.authEmail.checkValidity() || password.length < 6) return setAuthFeedback("请填写有效的邮箱和至少 6 位密码");
+      if (!betaCode) {
+        setAuthFeedback("请输入内测码；没有内测码也可取消登录，本地使用。");
+        els.authBetaCode.focus();
+        return;
+      }
       authFeedback = "";
+      authBusy = true;
+      updateAuthModeUi();
       try {
         setCloudStatus("syncing");
         els.authSubmitBtn.disabled = true;
         els.authSubmitBtn.textContent = "发送中";
         const session = await cloudRequest(`/auth/v1/signup?redirect_to=${encodeURIComponent(getAuthRedirectUrl())}`, {
           method: "POST",
-          body: JSON.stringify({ email, password })
+          body: JSON.stringify({ email, password, data: { beta_code: betaCode } })
         }, false);
+        els.authBetaCode.value = "";
         if (session?.access_token) {
           await acceptAuthSession(session);
+          authBusy = false;
           closeAuth();
           showToast("注册并登录成功");
         } else {
@@ -5523,8 +5538,8 @@
         setAuthFeedback(getAuthErrorMessage(error));
         showToast(getAuthErrorMessage(error));
       } finally {
-        els.authSubmitBtn.disabled = false;
-        els.authSubmitBtn.textContent = authMode === "signup" ? "注册" : "登录";
+        authBusy = false;
+        updateAuthModeUi();
       }
     }
 
